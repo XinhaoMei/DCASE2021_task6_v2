@@ -193,7 +193,7 @@ class Cnn14(nn.Module):
         self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
         self.conv_block4 = ConvBlock(in_channels=256, out_channels=512)
         self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024)
-        self.conv_block6 = ConvBlock(in_channels=1054, out_channels=2048)
+        self.conv_block6 = ConvBlock(in_channels=1024, out_channels=2048)
 
         self.fc1 = nn.Linear(2048, 512, bias=True)
 
