@@ -1,0 +1,53 @@
+mode: 'train' # 'eval' 'test'
+
+wave:
+  sr: 44100
+  window_size: 1024
+  hop_length: 512
+  mel_bins: 64
+  fmin: 50
+  fmax: 14000
+
+decoder:
+  decoder_only: Yes
+  nhead: 4
+  nhid: 128
+  nlayers: 2
+  dropout: 0.2
+  dim_feedforward: 2048
+  activation: 'gelu'
+
+encoder:
+  model: 'Cnn10'
+  freeze: No
+  pretrained: Yes
+
+word_embedding:
+  pretrained: No
+  freeze: Yes
+
+data:
+  input_field_name: 'audio_data'  # 'feature'
+  batch_size: 32
+  num_workers: 8
+  load_into_memory: No
+
+
+training:
+  mixup: No
+  alpha: 0.2
+  label_smoothing: No
+  keyword: No
+  spec_augmentation: Yes
+  epochs: 30
+  lr: !!float 1e-3
+  clip_grad: 2
+  seed: 20
+
+
+path:
+  words_list: 'data/pickles/words_list.p'
+  words_freq: 'data/pickles/words_freq.p' 
+  encoder: 'pretrained_models/encoder/'
+  word2vec: 'pretrained_models/word2vec/w2v.model'
+  model: ''
