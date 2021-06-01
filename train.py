@@ -51,7 +51,7 @@ def train():
             tgt_a = tgt_a[:, 1:]
             tgt_b = tgt_b[:, 1:]
             mixed_y_hat = mixed_y_hat.transpose(0, 1)
-            mixed_y_hat = mixed_y_hat[:, tgt_a.size()[1], :]
+            mixed_y_hat = mixed_y_hat[:, :tgt_a.size()[1], :]
 
             loss_a = criterion(mixed_y_hat.contiguous().view(-1, mixed_y_hat.size()[-1]),
                                 tgt_a.contiguous().view(-1))
