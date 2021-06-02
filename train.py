@@ -277,7 +277,7 @@ if config.mode == 'train':
             torch.save({
                     "model": model.state_dict(),
                     "optimizer": optimizer.state_dict(),
-                    }, str(model_output_dir) + 'model_{}.pt'.format(epoch))
+                    }, str(model_output_dir) + '/model_{}.pt'.format(epoch))
     main_logger.info('Training done.')
 
 if config.mode == 'eval':
