@@ -14,7 +14,6 @@ def scst_sample(model, src, tgt, eos_ind=9, sos_ind=0, max_len=30):
     ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(src.device)
 
     sampled_logprobs = torch.zeros(batch_size, max_len).to(src.device)
-    seqs = torch.zeros(batch_size, max_len).fill_(eos_ind).to(src.device)
 
     for i in range(max_len - 1):
         target_mask = model.generate_square_subsequent_mask(ys.shape[1]).to(src.device)
@@ -26,7 +25,7 @@ def scst_sample(model, src, tgt, eos_ind=9, sos_ind=0, max_len=30):
         logprobs = logprobs.gather(1, w_t).squeeze(1)
         sampled_logprobs[:, i] = logprobs
         ys = torch.cat((ys, w_t), dim=1)
-    return seqs, sampled_logprobs
+    return ys, sampled_logprobs
 
 
 # def sample_decode(output):
