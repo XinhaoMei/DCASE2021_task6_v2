@@ -30,9 +30,8 @@ def mixup_data(src, tgt, alpha=1):
     else:
         lam = 1
     index = torch.randperm(src.size()[0])
-    mixed_src = lam * src + (1 - lam) * src[index, :]
     tgt_a, tgt_b = tgt, tgt[index]
-    return mixed_src, tgt_a, tgt_b, lam, index
+    return tgt_a, tgt_b, lam, index
 
 
 def rotation_logger(x, y):
@@ -183,12 +182,12 @@ class Beam:
     In here, an eos is simply appended and still go through the model in next iteration.
     """
 
-    def __init__(self, beam_size, device, start_symbol_ind, end_symbol_ind):
+    def __init__(self, beam_size, device, sos_ind, eos_ind):
         self.device = device
         self.beam_size = beam_size
-        self.prev_beam = [[torch.ones(1).fill_(start_symbol_ind).long().to(device), 0]]
-        self.start_symbol_ind = start_symbol_ind
-        self.end_symbol_ind = end_symbol_ind
+        self.prev_beam = [[torch.ones(1).fill_(sos_ind).long().to(device), 0]]
+        self.sos_ind = sos_ind
+        self.eos_ind = eos_ind
         self.eos_top = False
         self.finished = []
         self.first_time = True
@@ -198,7 +197,7 @@ class Beam:
         if self.done():
             # if current beam is done, just add eos to the beam.
             for b in self.prev_beam:
-                b[0] = torch.cat([b[0], torch.tensor(self.end_symbol_ind).unsqueeze(0).to(self.device)])
+                b[0] = torch.cat([b[0], torch.tensor(self.eos_ind).unsqueeze(0).to(self.device)])
             return
 
         # in first time, the beam need not to align with each index.
@@ -207,7 +206,7 @@ class Beam:
             self.prev_beam = []
             for s, ind in zip(score, index):
                 # initialize each beam
-                self.prev_beam.append([torch.tensor([self.start_symbol_ind, ind]).long().to(self.device), s.item()])
+                self.prev_beam.append([torch.tensor([self.sos_ind, ind]).long().to(self.device), s.item()])
                 self.prev_beam = self.sort_beam(self.prev_beam)
         else:  # word_probs:(beam_size, ntoken)
             score, index = word_probs.topk(self.beam_size, 1, True, True)  # get topk
@@ -222,14 +221,14 @@ class Beam:
                     i += 1
 
             current_beam = self.sort_beam(current_beam)  # sort current beam
-            if current_beam[0][0][-1] == self.end_symbol_ind:  # check if the top beam ends with eos
+            if current_beam[0][0][-1] == self.eos_ind:  # check if the top beam ends with eos
                 self.eos_top = True
 
             # check for eos node and added them to finished beam list.
             # In the end, delete those nodes and do not let them have child note.
             delete_beam_index = []
             for i in range(len(current_beam)):
-                if current_beam[i][0][-1] == self.end_symbol_ind:
+                if current_beam[i][0][-1] == self.eos_ind:
                     delete_beam_index.append(i)
             for i in sorted(delete_beam_index, reverse=True):
                 self.finished.append(current_beam[i])
@@ -261,15 +260,15 @@ class Beam:
         return sorted(beam, key=lambda x: x[1], reverse=True)
 
 
-def beam_search(model, src, max_len=30, start_symbol_ind=0, end_symbol_ind=9, beam_size=1):
+def beam_search(model, src, max_len=30, sos_ind=0, eos_ind=9, beam_size=1):
     device = src.device  # src:(batch_size,T_in,feature_dim)
     batch_size = src.size()[0]
     memory = model.encode(src)  # memory:(T_mem,batch_size,nhid)
-    # ys = torch.ones(batch_size, 1).fill_(start_symbol_ind).long().to(device)  # ys_0: (batch_size,T_pred=1)
+    # ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(device)  # ys_0: (batch_size,T_pred=1)
 
     first_time = True
 
-    beam = [Beam(beam_size, device, start_symbol_ind, end_symbol_ind) for _ in range(batch_size)]  # a batch of beams
+    beam = [Beam(beam_size, device, sos_ind, eos_ind) for _ in range(batch_size)]  # a batch of beams
 
     for i in range(max_len):
         # end if all beams are done, or exceeds max length

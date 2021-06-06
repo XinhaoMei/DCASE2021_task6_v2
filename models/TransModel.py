@@ -140,9 +140,9 @@ class TransformerModel(nn.Module):
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
 
-    def encode(self, src):
+    def encode(self, src, mixup_param=None):
 
-        src = self.feature_extractor(src)
+        src = self.feature_extractor(src, mixup_param)
         src = self.audio_linear(src)
 
         if not self.decoder_only:
@@ -178,7 +178,7 @@ class TransformerModel(nn.Module):
 
     def forward(self, src, tgt, mixup_param=None, input_mask=None, target_mask=None, target_padding_mask=None):
 
-        mem = self.encode(src)
+        mem = self.encode(src, mixup_param)
         output = self.decode(mem, tgt, mixup_param,
                             input_mask=input_mask,
                             target_mask=target_mask,

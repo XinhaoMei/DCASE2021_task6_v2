@@ -1,12 +1,14 @@
-mode: 'train' # 'eval' 'test'
+mode: 'train' # 'eval' 'test' 'finetune'
+
 
 wave:
-  sr: 44100
+  sr: 32000
   window_size: 1024
-  hop_length: 512
+  hop_length: 320
   mel_bins: 64
   fmin: 50
   fmax: 14000
+
 
 decoder:
   decoder_only: Yes
@@ -17,16 +19,20 @@ decoder:
   dim_feedforward: 2048
   activation: 'gelu'
 
+
 encoder:
   model: 'Cnn10'
   freeze: No
   pretrained: Yes
 
+
 word_embedding:
   pretrained: No
   freeze: Yes
 
+
 data:
+  type: 'audiocaps'  # 'clotho' 
   input_field_name: 'audio_data'  # 'feature'
   batch_size: 32
   num_workers: 8
@@ -45,9 +51,27 @@ training:
   seed: 20
 
 
+finetune:
+  audiocap: Yes
+  lr: !!float 1e-4
+  model: "outputs/audiocaps/audio_exp1_Cnn10_random/model/model_30.pt"
+  epochs: 30
+
+
 path:
-  words_list: 'data/pickles/words_list.p'
-  words_freq: 'data/pickles/words_freq.p' 
+  clotho:
+    words_list: 'data/pickles/words_list.p'
+    words_freq: 'data/pickles/words_freq.p' 
+  audiocaps:
+    words_list: 'audiocaps/pickles/words_list.p'
+    words_freq: 'audiocaps/pickles/words_freq.p' 
   encoder: 'pretrained_models/encoder/'
   word2vec: 'pretrained_models/word2vec/w2v.model'
   model: ''
+
+
+rl:
+  mode: 'greedy'  # 'beam'
+  epochs: 25
+  model: "outputs/spec/audio_exp1_Cnn10_random_mixture/modelmodel_29.pt"
+  lr: !!float 1e-5

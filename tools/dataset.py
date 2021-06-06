@@ -18,9 +18,9 @@ from tools.file_io import load_csv_file, write_pickle_file
 
 parser = argparse.ArgumentParser(description='Setting for dataset creation')
 
-parser.add_argument('--sr', type=int, default=44100, help="Sampling rate for the audio.")
+parser.add_argument('--sr', type=int, default=32000, help="Sampling rate for the audio.")
 parser.add_argument('--n_fft', type=int, default=1024, help="Length of the FFT window.")
-parser.add_argument('--hop_length', type=int, default=512, help="Number of samples between successive frames.")
+parser.add_argument('--hop_length', type=int, default=320, help="Number of samples between successive frames.")
 parser.add_argument('--n_mels', type=int, default=64, help="Number of mel bins.")
 parser.add_argument('--window', type=str, default='hann', help='Type of window.')
 
@@ -39,7 +39,7 @@ def create_dataset():
 
     for csv_item in chain(dev_csv, val_csv, eval_csv):
         ''' Process each caption'''
-        captions = [_sentenc_process(csv_item[caption_field], add_specials=True) for caption_field in caption_fields]
+        captions = [_sentence_process(csv_item[caption_field], add_specials=True) for caption_field in caption_fields]
 
         [csv_item.update({caption_field: caption})
          for caption_field, caption in zip(caption_fields, captions)]
@@ -52,10 +52,6 @@ def create_dataset():
 
     inner_logger.info('Creating vocabulary and counting words frequency...')
     words_list, words_freq = _create_vocabulary(dev_captions)
-    if words_list[4364] == 'separate':
-        words_list[4364] = 'due'
-    if words_list[4365] == 'due':
-        words_list[4365] = 'separate'
     pickles_path = Path('data/pickles')
     pickles_path.mkdir(parents=True, exist_ok=True)
     write_pickle_file(words_list, str(pickles_path.joinpath('words_list.p')))
@@ -99,7 +95,7 @@ def _create_vocabulary(captions):
     return words_list, words_freq
 
 
-def _sentenc_process(sentence, add_specials=False):
+def _sentence_process(sentence, add_specials=False):
 
     # transform to lower case
     sentence = sentence.lower()
@@ -112,7 +108,6 @@ def _sentenc_process(sentence, add_specials=False):
 
     # remove punctuations
     sentence = sub('[,.!?;:\"]', ' ', sentence).replace('  ', ' ')
-
 
     return sentence
 

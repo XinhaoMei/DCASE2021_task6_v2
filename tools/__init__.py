@@ -7,3 +7,5 @@ import tools.file_io
 import tools.dataset
 import tools.utils
 import tools.config_loader
+import tools.rl_utils
+import tools.audiocaps_dataset

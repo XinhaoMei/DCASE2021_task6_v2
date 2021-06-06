@@ -125,7 +125,7 @@ class Cnn10(nn.Module):
         init_bn(self.bn0)
         init_layer(self.fc1)
 
-    def forward(self, input):
+    def forward(self, input, mixup_param=None):
         """ input: (batch_size, time_steps, mel_bins)"""
 
         if self.input_data == 'audio_data':
@@ -133,6 +133,9 @@ class Cnn10(nn.Module):
             x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
         else:
             x = input.unsqueeze(1)  # (batch_size, 1, time_steps, mel_bins)
+        if mixup_param is not None:
+            lam, index = mixup_param
+            x = lam * x + (1 - lam) * x[index]
 
         x = x.transpose(1, 3)
         x = self.bn0(x)
