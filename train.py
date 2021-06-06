@@ -290,7 +290,7 @@ if config.mode == 'train':
 
     main_logger.info('Training mode.')
     optimizer = torch.optim.Adam(params=model.parameters(), lr=config.training.lr, weight_decay=1e-6)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)               #StepLR(optimizer, 10, 0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
     scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler)
 
     epochs = config.training.epochs

@@ -23,13 +23,13 @@ def setup_seed(seed):
     # torch.backends.cudnn.benchmark = False
 
 
-def mixup_data(src, tgt, alpha=1):
+def mixup_data(tgt, alpha=1):
 
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
     else:
         lam = 1
-    index = torch.randperm(src.size()[0])
+    index = torch.randperm(tgt.size()[0])
     tgt_a, tgt_b = tgt, tgt[index]
     return tgt_a, tgt_b, lam, index
 

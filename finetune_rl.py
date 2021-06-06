@@ -256,6 +256,11 @@ main_logger.info(f'Len of training data: {len(training_data)}')
 main_logger.info(f'Len of evaluation data: {len(evaluation_data)}')
 
 optimizer = torch.optim.Adam(params=model.parameters(), lr=config.rl.lr, weight_decay=1e-6)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
+scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler)
+
+optimizer.zero_grad()
+optimizer.step()
 
 epochs = config.rl.epochs
 ep = 1
@@ -264,6 +269,8 @@ spiders = []
 main_logger.info(f'Optimize {config.rl.mode} search.')
 
 for epoch in range(ep, epochs + 1):
+
+    scheduler_warmup.step(epoch)
 
     main_logger.info(f'Finetune using RL epoch {epoch}...')
     train()
