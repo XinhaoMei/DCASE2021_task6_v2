@@ -18,9 +18,9 @@ from tools.file_io import load_csv_file, write_pickle_file
 
 parser = argparse.ArgumentParser(description='Setting for dataset creation')
 
-parser.add_argument('--sr', type=int, default=32000, help="Sampling rate for the audio.")
+parser.add_argument('--sr', type=int, default=44100, help="Sampling rate for the audio.")
 parser.add_argument('--n_fft', type=int, default=1024, help="Length of the FFT window.")
-parser.add_argument('--hop_length', type=int, default=320, help="Number of samples between successive frames.")
+parser.add_argument('--hop_length', type=int, default=512, help="Number of samples between successive frames.")
 parser.add_argument('--n_mels', type=int, default=64, help="Number of mel bins.")
 parser.add_argument('--window', type=str, default='hann', help='Type of window.')
 

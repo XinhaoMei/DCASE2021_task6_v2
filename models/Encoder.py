@@ -87,6 +87,8 @@ class Cnn10(nn.Module):
 
         self.input_data = config.data.input_field_name
 
+        self.bn0 = nn.BatchNorm2d(64)
+
         if self.input_data == 'audio_data':
             sr = config.wave.sr
             window_size = config.wave.window_size
@@ -103,10 +105,7 @@ class Cnn10(nn.Module):
                 n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=1.0, amin=1e-10, top_db=None,
                 freeze_parameters=True)
 
-
         self.is_spec_augment = config.training.spec_augmentation
-
-        self.bn0 = nn.BatchNorm2d(64)
 
         if self.is_spec_augment:
             self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,

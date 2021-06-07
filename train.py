@@ -225,7 +225,7 @@ input_field_name = config.data.input_field_name
 
 # data loading
 if dataset == 'clotho':
-    #words_list_path = config.path.clotho.words_list
+    words_list_path = config.path.clotho.words_list
     #words_freq_path = config.path.clotho.words_freq
     training_data = get_clotho_loader(split='development',
                                   input_field_name=input_field_name,
@@ -241,7 +241,7 @@ if dataset == 'clotho':
                                     batch_size=batch_size,
                                     num_workers=num_workers)
 elif dataset == 'audiocaps':
-    #words_list_path = config.path.audiocaps.words_list
+    words_list_path = config.path.audiocaps.words_list
     #words_freq_path = config.path.audiocaps.words_freq
     training_data = get_audiocaps_loader(split='train',
                                   batch_size=batch_size,
@@ -254,7 +254,7 @@ elif dataset == 'audiocaps':
                                     num_workers=num_workers)
 
 # loading vocabulary list
-words_list_path = 'data/pickles/new_words_list.p'
+#words_list_path = 'data/pickles/new_words_list.p'
 words_list = load_picke_file(words_list_path)
 ntokens = len(words_list)
 sos_ind = words_list.index('<sos>')
@@ -309,7 +309,8 @@ if config.mode == 'train':
         eval_greedy(evaluation_data)
         eval_beam(evaluation_data, beam_size=2)
         eval_beam(evaluation_data, beam_size=3)
-        # eval_beam(evaluation_data, beam_size=4)
+        eval_beam(evaluation_data, beam_size=4)
+        eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Training done.')
 
 elif config.mode == 'finetune':
