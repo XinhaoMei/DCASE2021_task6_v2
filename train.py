@@ -113,7 +113,7 @@ def eval_greedy(data, max_len=30):
                         break
 
             y_hat_batch = y_hat_batch.int()
-            y_hat_all.extend(y_hat_batch.detach().cpu())
+            y_hat_all.extend(y_hat_batch.cpu())
             ref_captions_all.extend(captions)
             file_names_all.extend(f_names)
 
@@ -152,7 +152,7 @@ def eval_beam(data, beam_size, max_len=30):
                         break
 
             y_hat_batch = y_hat_batch.int()
-            y_hat_all.extend(y_hat_batch.detach().cpu())
+            y_hat_all.extend(y_hat_batch.cpu())
             ref_captions_all.extend(captions)
             file_names_all.extend(f_names)
 
@@ -164,7 +164,7 @@ def eval_beam(data, beam_size, max_len=30):
         cider = beam_metrics['cider']['score']
         main_logger.info(f'cider: {cider:7.4f}')
         main_logger.info(f'Spider score using beam search (beam size:{beam_size}): {spider:7.4f}, eval time: {eval_time:.4f}')
-        if config.mode is not 'eval':
+        if config.mode != 'eval':
             spiders.append(spider)
             if spider >= max(spiders):
                 torch.save({
@@ -173,6 +173,7 @@ def eval_beam(data, beam_size, max_len=30):
                         "beam_size": beam_size,
                         "epoch": epoch,
                         }, str(model_output_dir) + '/best_model.pt'.format(epoch))
+
 
 parser = argparse.ArgumentParser(description='Settings for audio caption model')
 
@@ -328,6 +329,12 @@ elif config.mode == 'finetune':
         model.load_state_dict(dict_new)
     else:
         model.load_state_dict(pretrained_model)
+    main_logger.info('Evaluating the baseline model performance.')
+    eval_greedy(evaluation_data)
+    eval_beam(evaluation_data, beam_size=2)
+    eval_beam(evaluation_data, beam_size=3)
+    eval_beam(evaluation_data, beam_size=4)
+    eval_beam(evaluation_data, beam_size=5)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=config.finetune.lr, weight_decay=1e-6)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
@@ -350,6 +357,7 @@ elif config.mode == 'finetune':
         eval_beam(evaluation_data, beam_size=2)
         eval_beam(evaluation_data, beam_size=3)
         eval_beam(evaluation_data, beam_size=4)
+        eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Finetune done.')
 
 elif config.mode == 'eval':
@@ -361,5 +369,6 @@ elif config.mode == 'eval':
     eval_beam(evaluation_data, beam_size=2)
     eval_beam(evaluation_data, beam_size=3)
     eval_beam(evaluation_data, beam_size=4)
+    eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Evaluation done.')
 
