@@ -26,6 +26,11 @@ encoder:
   pretrained: Yes
 
 
+dcasenet:
+  use: Yes
+  path: 'pretrained_models/encoder/best_SED.pt'
+
+
 word_embedding:
   pretrained: No
   freeze: Yes
@@ -52,10 +57,10 @@ training:
 
 
 finetune:
-  audiocap: Yes
+  audiocap: No
   lr: !!float 1e-4
   model: "outputs/audiocaps/audio_exp1_Cnn10_random/model/model_30.pt"
-  epochs: 30
+  epochs: 20
 
 
 path:
@@ -67,7 +72,7 @@ path:
     words_freq: 'audiocaps/pickles/words_freq.p' 
   encoder: 'pretrained_models/encoder/'
   word2vec: 'pretrained_models/word2vec/w2v.model'
-  model: ''
+  model: 'outputs/submission1/audio_exp_random_mixture/model/best_model.pt'
 
 
 rl:

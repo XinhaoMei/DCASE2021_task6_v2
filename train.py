@@ -229,12 +229,18 @@ if dataset == 'clotho':
     words_list_path = config.path.clotho.words_list
     #words_freq_path = config.path.clotho.words_freq
     training_data = get_clotho_loader(split='development',
-                                  input_field_name=input_field_name,
-                                  load_into_memory=False,
-                                  batch_size=batch_size,
-                                  shuffle=True,
-                                  drop_last=True,
-                                  num_workers=num_workers)
+                                      input_field_name=input_field_name,
+                                      load_into_memory=False,
+                                      batch_size=batch_size,
+                                      shuffle=True,
+                                      drop_last=True,
+                                      num_workers=num_workers)
+
+    validation_data = get_clotho_loader(split='validation',
+                                        input_field_name=input_field_name,
+                                        load_into_memory=False,
+                                        batch_size=batch_size,
+                                        num_workers=num_workers)
 
     evaluation_data = get_clotho_loader(split='evaluation',
                                     input_field_name=input_field_name,
@@ -329,16 +335,18 @@ elif config.mode == 'finetune':
         model.load_state_dict(dict_new)
     else:
         model.load_state_dict(pretrained_model)
-    main_logger.info('Evaluating the baseline model performance.')
-    eval_greedy(evaluation_data)
-    eval_beam(evaluation_data, beam_size=2)
-    eval_beam(evaluation_data, beam_size=3)
-    eval_beam(evaluation_data, beam_size=4)
-    eval_beam(evaluation_data, beam_size=5)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=config.finetune.lr, weight_decay=1e-6)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
     scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler)
+
+    main_logger.info('Evaluating the baseline model performance.')
+    eval_greedy(evaluation_data)
+    epoch = 0
+    eval_beam(evaluation_data, beam_size=2)
+    eval_beam(evaluation_data, beam_size=3)
+    eval_beam(evaluation_data, beam_size=4)
+    eval_beam(evaluation_data, beam_size=5)
 
     optimizer.zero_grad()
     optimizer.step()
@@ -365,6 +373,13 @@ elif config.mode == 'eval':
     main_logger.info('Evaluation mode.')
 
     model.load_state_dict(torch.load(config.path.model)['model'])
+    main_logger.info('Metrcis on validation set')
+    eval_greedy(validation_data)
+    eval_beam(validation_data, beam_size=2)
+    eval_beam(validation_data, beam_size=3)
+    eval_beam(validation_data, beam_size=4)
+    eval_beam(validation_data, beam_size=5)
+    main_logger.info('Metrcis on evaluation set')
     eval_greedy(evaluation_data)
     eval_beam(evaluation_data, beam_size=2)
     eval_beam(evaluation_data, beam_size=3)

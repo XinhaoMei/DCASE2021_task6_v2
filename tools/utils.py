@@ -64,18 +64,20 @@ def set_tgt_padding_mask(tgt, tgt_len):
 
 def greedy_decode(model, src, max_len=30, sos_ind=0):
 
-    batch_size = src.shape[0]
-    mem = model.encode(src)
+    model.eval()
+    with torch.no_grad():
+        batch_size = src.shape[0]
+        mem = model.encode(src)
 
-    ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(src.device)
+        ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(src.device)
 
-    for i in range(max_len - 1):
-        target_mask = model.generate_square_subsequent_mask(ys.shape[1]).to(src.device)
-        out = model.decode(mem, ys, target_mask=target_mask)  # T_out, batch_size, ntoken
-        prob = model.generator(out[-1, :])
-        next_word = torch.argmax(prob, dim=1)
-        next_word = next_word.unsqueeze(1)
-        ys = torch.cat([ys, next_word], dim=1)
+        for i in range(max_len - 1):
+            target_mask = model.generate_square_subsequent_mask(ys.shape[1]).to(src.device)
+            out = model.decode(mem, ys, target_mask=target_mask)  # T_out, batch_size, ntoken
+            prob = model.generator(out[-1, :])
+            next_word = torch.argmax(prob, dim=1)
+            next_word = next_word.unsqueeze(1)
+            ys = torch.cat([ys, next_word], dim=1)
     return ys
 
 
@@ -261,41 +263,41 @@ class Beam:
 
 
 def beam_search(model, src, max_len=30, sos_ind=0, eos_ind=9, beam_size=1):
-    device = src.device  # src:(batch_size,T_in,feature_dim)
-    batch_size = src.size()[0]
-    memory = model.encode(src)  # memory:(T_mem,batch_size,nhid)
-    # ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(device)  # ys_0: (batch_size,T_pred=1)
+    model.eval()
+    with torch.no_grad():
+        device = src.device  # src:(batch_size,T_in,feature_dim)
+        batch_size = src.size()[0]
+        memory = model.encode(src)  # memory:(T_mem,batch_size,nhid)
 
-    first_time = True
+        first_time = True
 
-    beam = [Beam(beam_size, device, sos_ind, eos_ind) for _ in range(batch_size)]  # a batch of beams
+        beam = [Beam(beam_size, device, sos_ind, eos_ind) for _ in range(batch_size)]  # a batch of beams
 
-    for i in range(max_len):
-        # end if all beams are done, or exceeds max length
-        if all((b.done() for b in beam)):
-            break
+        for i in range(max_len):
+            # end if all beams are done, or exceeds max length
+            if all((b.done() for b in beam)):
+                break
 
-        # get current input
-        ys = torch.cat([b.get_current_state() for b in beam], dim=0).to(device).requires_grad_(False)
+            # get current input
+            ys = torch.cat([b.get_current_state() for b in beam], dim=0).to(device).requires_grad_(False)
 
-        # get input mask
-        target_mask = model.generate_square_subsequent_mask(ys.size()[1]).to(device)
-        out = model.decode(memory, ys, target_mask=target_mask)  # (T_out, batch_size, ntoken) for first time,
-        # (T_out, batch_size*beam_size, ntoken) in other times
-        out = F.log_softmax(out[-1, :], dim=-1)  # (batch_size, ntoken) for first time,
-        # (batch_size*beam_size, ntoken) in other times
+            # get input mask
+            target_mask = model.generate_square_subsequent_mask(ys.size()[1]).to(device)
+            out = model.decode(memory, ys, target_mask=target_mask)  # (T_out, batch_size, ntoken) for first time,
+            # (T_out, batch_size*beam_size, ntoken) in other times
+            out = F.log_softmax(out[-1, :], dim=-1)  # (batch_size, ntoken) for first time,
+            # (batch_size*beam_size, ntoken) in other times
 
-        beam_batch = 1 if first_time else beam_size
-        # in the first run, a slice of 1 should be taken for each beam,
-        # later, a slice of [beam_size] need to be taken for each beam.
-        for j, b in enumerate(beam):
-            b.advance(out[j * beam_batch:(j + 1) * beam_batch, :], first_time)  # update each beam
+            beam_batch = 1 if first_time else beam_size
+            # in the first run, a slice of 1 should be taken for each beam,
+            # later, a slice of [beam_size] need to be taken for each beam.
+            for j, b in enumerate(beam):
+                b.advance(out[j * beam_batch:(j + 1) * beam_batch, :], first_time)  # update each beam
 
-        if first_time:
-            first_time = False  # reset the flag
-            # after the first run, the beam expands, so the memory needs to expands too.
-            memory = memory.repeat_interleave(beam_size, dim=1)
+            if first_time:
+                first_time = False  # reset the flag
+                # after the first run, the beam expands, so the memory needs to expands too.
+                memory = memory.repeat_interleave(beam_size, dim=1)
 
-    output = [b.get_output() for b in beam]
-    return output
-
+        output = [b.get_output() for b in beam]
+        return output
