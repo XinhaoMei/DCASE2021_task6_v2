@@ -4,6 +4,7 @@
 # @E-mail  : x.mei@surrey.ac.uk
 
 import torch
+import csv
 import torch.nn as nn
 import time
 import sys
@@ -13,6 +14,7 @@ from tqdm import tqdm
 from pathlib import Path
 from data_handling.clotho_dataset import get_clotho_loader
 from data_handling.audiocaps_dataset import get_audiocaps_loader
+from data_handling.test_dataset import get_test_loader
 from tools.config_loader import get_config
 from tools.utils import setup_seed, align_word_embedding, \
 LabelSmoothingLoss, set_tgt_padding_mask, rotation_logger, \
@@ -43,6 +45,8 @@ def train():
         optimizer.zero_grad()
 
         if config.training.mixup:
+
+            # mixup on spectrogram
             tgt_a, tgt_b, lam, index = mixup_data(tgt, alpha=config.training.alpha)
             mixup_param = [lam, index]
             mixed_y_hat = model(src, tgt, mixup_param=mixup_param, target_padding_mask=tgt_pad_mask)
@@ -76,7 +80,7 @@ def train():
         optimizer.step()
 
         if config.training.mixup:
-            batch_losses[batch_idx] = loss.cpu().item() + loss_mixup.cpu().item()
+            batch_losses[batch_idx] = (loss.cpu().item() + loss_mixup.cpu().item()) / 2
         else:
             batch_losses[batch_idx] = loss.cpu().item()
 
@@ -123,7 +127,7 @@ def eval_greedy(data, max_len=30):
         greedy_metrics = evaluate_metrics(captions_pred, captions_gt)
         spider = greedy_metrics['spider']['score']
         cider = greedy_metrics['cider']['score']
-        main_logger.info(f'cider: {cider:7.4f}')
+        main_logger.info(f'Cider: {cider:7.4f}')
         main_logger.info(f'Spider score using greedy search: {spider:7.4f}, eval time: {eval_time:.4f}')
 
 
@@ -162,8 +166,11 @@ def eval_beam(data, beam_size, max_len=30):
         beam_metrics = evaluate_metrics(captions_pred, captions_gt)
         spider = beam_metrics['spider']['score']
         cider = beam_metrics['cider']['score']
-        main_logger.info(f'cider: {cider:7.4f}')
+        main_logger.info(f'Cider: {cider:7.4f}')
         main_logger.info(f'Spider score using beam search (beam size:{beam_size}): {spider:7.4f}, eval time: {eval_time:.4f}')
+        if beam_size == 3 and (epoch % 5) == 0:
+            for metric, values in beam_metrics.items():
+                main_logger.info(f'beam search (size 3): {metric:<7s}: {values["score"]:7.4f}')
         if config.mode != 'eval':
             spiders.append(spider)
             if spider >= max(spiders):
@@ -173,6 +180,32 @@ def eval_beam(data, beam_size, max_len=30):
                         "beam_size": beam_size,
                         "epoch": epoch,
                         }, str(model_output_dir) + '/best_model.pt'.format(epoch))
+
+
+def test_beam(beam_size, max_len=30):
+
+    model.eval()
+    with torch.no_grad():
+        with open('test_output.csv', 'w') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(['file_name', 'caption_predicted'])
+            for src, file_names in tqdm(enumerate(test_data), total=len(test_data)):
+                src = src.to(device)
+                output = beam_search(model, src, sos_ind=sos_ind, eos_ind=eos_ind, beam_size=beam_size)
+
+                output_batch = []
+                for sample in output:
+                    sample = sample[1:]
+                    sample_words_ind = []
+                    for sample_word in sample:
+                        if sample_word == eos_ind:
+                            break
+                        sample_words_ind.append(sample_word)
+                    caption_word = [words_list[index] for index in sample_words_ind]
+                    caption_str = ' '.join(caption_word)
+                    output_batch.append(caption_str)
+                for caption, file_name, in zip(output_batch, file_names):
+                    writer.writerow([file_name, caption])
 
 
 parser = argparse.ArgumentParser(description='Settings for audio caption model')
@@ -196,19 +229,22 @@ log_output_dir.mkdir(parents=True, exist_ok=True)
 
 logger.remove()
 
-logger.add(sys.stdout, format='{time: YYYY-MM-DD at HH:mm:ss} | {message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 1)
+logger.add(sys.stdout, format='{time: YYYY-MM-DD at HH:mm:ss} | {message}',
+           level='INFO', filter=lambda record: record['extra']['indent'] == 1)
 
-logger.add(log_output_dir.joinpath('output.txt'), format='{time: YYYY-MM-DD at HH:mm:ss} | {message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 1)
+logger.add(log_output_dir.joinpath('output.txt'),
+           format='{time: YYYY-MM-DD at HH:mm:ss} | {message}', level='INFO',
+           filter=lambda record: record['extra']['indent'] == 1)
 
-logger.add(str(log_output_dir) + '/captions.txt', format='{message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 2,
-            rotation=rotation_logger)
+logger.add(str(log_output_dir) + '/captions.txt',
+           format='{message}', level='INFO',
+           filter=lambda record: record['extra']['indent'] == 2,
+           rotation=rotation_logger)
 
-logger.add(str(log_output_dir) + '/beam_captions.txt', format='{message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 3,
-            rotation=rotation_logger)
+logger.add(str(log_output_dir) + '/beam_captions.txt',
+           format='{message}', level='INFO',
+           filter=lambda record: record['extra']['indent'] == 3,
+           rotation=rotation_logger)
 
 main_logger = logger.bind(indent=1)
 
@@ -227,7 +263,7 @@ input_field_name = config.data.input_field_name
 # data loading
 if dataset == 'clotho':
     words_list_path = config.path.clotho.words_list
-    #words_freq_path = config.path.clotho.words_freq
+    # words_freq_path = config.path.clotho.words_freq
     training_data = get_clotho_loader(split='development',
                                       input_field_name=input_field_name,
                                       load_into_memory=False,
@@ -243,25 +279,30 @@ if dataset == 'clotho':
                                         num_workers=num_workers)
 
     evaluation_data = get_clotho_loader(split='evaluation',
-                                    input_field_name=input_field_name,
-                                    load_into_memory=False,
-                                    batch_size=batch_size,
-                                    num_workers=num_workers)
+                                        input_field_name=input_field_name,
+                                        load_into_memory=False,
+                                        batch_size=batch_size,
+                                        num_workers=num_workers)
 elif dataset == 'audiocaps':
     words_list_path = config.path.audiocaps.words_list
-    #words_freq_path = config.path.audiocaps.words_freq
+    # words_freq_path = config.path.audiocaps.words_freq
     training_data = get_audiocaps_loader(split='train',
-                                  batch_size=batch_size,
-                                  shuffle=True,
-                                  drop_last=True,
-                                  num_workers=num_workers)
+                                         batch_size=batch_size,
+                                         shuffle=True,
+                                         drop_last=True,
+                                         num_workers=num_workers)
+
+    validation_data = get_audiocaps_loader(split='val',
+                                           batch_size=batch_size,
+                                           num_workers=num_workers)
 
     evaluation_data = get_audiocaps_loader(split='test',
-                                    batch_size=batch_size,
-                                    num_workers=num_workers)
+                                           batch_size=batch_size,
+                                           num_workers=num_workers)
 
 # loading vocabulary list
-#words_list_path = 'data/pickles/new_words_list.p'
+if config.mode == 'finetune' and config.finetune.audiocap:
+    words_list_path = 'data/pickles/new_words_list.p'
 words_list = load_picke_file(words_list_path)
 ntokens = len(words_list)
 sos_ind = words_list.index('<sos>')
@@ -273,7 +314,7 @@ pretrained_word_embedding = align_word_embedding(words_list, config.path.word2ve
 
 
 main_logger.info('Training setting:\n'
-            f'{printer.pformat(config)}')
+                 f'{printer.pformat(config)}')
 
 model = TransformerModel(config, words_list, pretrained_cnn, pretrained_word_embedding)
 
@@ -281,7 +322,7 @@ model.to(device)
 
 main_logger.info(f'Model:\n{model}\n')
 main_logger.info('Total number of parameters:'
-            f'{sum([i.numel() for i in model.parameters()])}')
+                 f'{sum([i.numel() for i in model.parameters()])}')
 
 main_logger.info(f'Len of training data: {len(training_data)}')
 main_logger.info(f'Len of evaluation data: {len(evaluation_data)}')
@@ -312,13 +353,21 @@ if config.mode == 'train':
 
         main_logger.info(f'Training epoch {epoch}...')
         train()
-        main_logger.info('Evaluating...')
-        eval_greedy(evaluation_data)
-        eval_beam(evaluation_data, beam_size=2)
-        eval_beam(evaluation_data, beam_size=3)
-        eval_beam(evaluation_data, beam_size=4)
-        eval_beam(evaluation_data, beam_size=5)
+        main_logger.info('Metrcis on validation set')
+        eval_greedy(validation_data)
+        eval_beam(validation_data, beam_size=2)
+        eval_beam(validation_data, beam_size=3)
+        eval_beam(validation_data, beam_size=4)
+        eval_beam(validation_data, beam_size=5)
     main_logger.info('Training done.')
+    model.load_state_dict(torch.load(str(model_output_dir) + '/best_model.pt')['model'])
+    main_logger.info('Metrcis on evaluation set')
+    eval_greedy(evaluation_data)
+    eval_beam(evaluation_data, beam_size=2)
+    eval_beam(evaluation_data, beam_size=3)
+    eval_beam(evaluation_data, beam_size=4)
+    eval_beam(evaluation_data, beam_size=5)
+    main_logger.info('Evaluation done.')
 
 elif config.mode == 'finetune':
 
@@ -337,8 +386,7 @@ elif config.mode == 'finetune':
         model.load_state_dict(pretrained_model)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=config.finetune.lr, weight_decay=1e-6)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
-    scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 15, 0.1)
 
     main_logger.info('Evaluating the baseline model performance.')
     eval_greedy(evaluation_data)
@@ -348,37 +396,21 @@ elif config.mode == 'finetune':
     eval_beam(evaluation_data, beam_size=4)
     eval_beam(evaluation_data, beam_size=5)
 
-    optimizer.zero_grad()
-    optimizer.step()
-
     epochs = config.finetune.epochs
     ep = 1
 
     for epoch in range(ep, epochs + 1):
 
-        scheduler_warmup.step(epoch)
-
         main_logger.info(f'Finetune epoch {epoch}...')
         train()
         main_logger.info('Evaluating...')
-        eval_greedy(evaluation_data)
-        eval_beam(evaluation_data, beam_size=2)
-        eval_beam(evaluation_data, beam_size=3)
-        eval_beam(evaluation_data, beam_size=4)
-        eval_beam(evaluation_data, beam_size=5)
+        eval_greedy(validation_data)
+        eval_beam(validation_data, beam_size=2)
+        eval_beam(validation_data, beam_size=3)
+        eval_beam(validation_data, beam_size=4)
+        eval_beam(validation_data, beam_size=5)
     main_logger.info('Finetune done.')
-
-elif config.mode == 'eval':
-
-    main_logger.info('Evaluation mode.')
-
-    model.load_state_dict(torch.load(config.path.model)['model'])
-    main_logger.info('Metrcis on validation set')
-    eval_greedy(validation_data)
-    eval_beam(validation_data, beam_size=2)
-    eval_beam(validation_data, beam_size=3)
-    eval_beam(validation_data, beam_size=4)
-    eval_beam(validation_data, beam_size=5)
+    model.load_state_dict(torch.load(str(model_output_dir) + '/best_model.pt')['model'])
     main_logger.info('Metrcis on evaluation set')
     eval_greedy(evaluation_data)
     eval_beam(evaluation_data, beam_size=2)
@@ -387,3 +419,26 @@ elif config.mode == 'eval':
     eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Evaluation done.')
 
+elif config.mode == 'eval':
+
+    main_logger.info('Evaluation mode.')
+
+    model.load_state_dict(torch.load(config.path.model)['model'])
+    main_logger.info('Metrcis on evaluation set')
+    eval_greedy(evaluation_data)
+    eval_beam(evaluation_data, beam_size=2)
+    eval_beam(evaluation_data, beam_size=3)
+    eval_beam(evaluation_data, beam_size=4)
+    eval_beam(evaluation_data, beam_size=5)
+    main_logger.info('Evaluation done.')
+
+elif config.mode == 'test':
+    test_dataset = get_test_loader(load_into_memory=False,
+                                   batch_size=32,
+                                   shuffle=False,
+                                   drop_last=False,
+                                   num_workers=8)
+    eval_model = torch.load(config.test.model)['model']
+    model.load_state_dict(eval_model)
+    test_beam(beam_size=3)
+    main_logger.info('Test done')

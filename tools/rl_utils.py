@@ -3,6 +3,7 @@
 # @Author  : Xinhao Mei @CVSSP, University of Surrey
 # @E-mail  : x.mei@surrey.ac.uk
 
+''' Code for rl adapted from https://github.com/wsntxxn/DCASE2020T6 '''
 
 import torch
 
@@ -26,18 +27,6 @@ def scst_sample(model, src, tgt, eos_ind=9, sos_ind=0, max_len=30):
         sampled_logprobs[:, i] = logprobs
         ys = torch.cat((ys, w_t), dim=1)
     return ys, sampled_logprobs
-
-
-# def sample_decode(output):
-
-#     log_probs = torch.log_softmax(output, dim=1)
-#     prob_prev = torch.exp(log_probs)
-#     w_t = torch.multinomial(prob_prev, 1)
-#     sampled_logprobs = log_probs.gather(1, w_t).squeeze(1)
-#     w_t = w_t.view(-1)
-#     w_t = w_t.detach().long()
-
-#     return w_t, sampled_logprobs
 
 
 def get_self_critical_reward(greedy_sample, sampled, tgt, words_list, sos_ind, eos_ind):

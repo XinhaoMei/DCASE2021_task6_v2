@@ -13,7 +13,7 @@ from loguru import logger
 from pathlib import Path
 from itertools import chain
 from re import sub
-from tools.file_io import load_csv_file, write_pickle_file
+from tools.file_io import load_csv_file, write_pickle_file, load_picke_file
 
 
 parser = argparse.ArgumentParser(description='Setting for dataset creation')
@@ -45,18 +45,20 @@ def create_dataset():
          for caption_field, caption in zip(caption_fields, captions)]
     inner_logger.info('Done!')
 
-    # all captions in dev set
-    dev_captions = [csv_entry.get(caption_field)
-                        for csv_entry in dev_csv
-                        for caption_field in caption_fields]
+    # # all captions in dev set
+    # dev_captions = [csv_entry.get(caption_field)
+    #                     for csv_entry in dev_csv
+    #                     for caption_field in caption_fields]
 
-    inner_logger.info('Creating vocabulary and counting words frequency...')
-    words_list, words_freq = _create_vocabulary(dev_captions)
-    pickles_path = Path('data/pickles')
-    pickles_path.mkdir(parents=True, exist_ok=True)
-    write_pickle_file(words_list, str(pickles_path.joinpath('words_list.p')))
-    write_pickle_file(words_freq, str(pickles_path.joinpath('words_freq.p')))
-    inner_logger.info(f'Done. Total {len(words_list)} words in the vocabulary.')
+    # inner_logger.info('Creating vocabulary and counting words frequency...')
+    # words_list, words_freq = _create_vocabulary(dev_captions)
+    # pickles_path = Path('data/pickles')
+    # pickles_path.mkdir(parents=True, exist_ok=True)
+    # write_pickle_file(words_list, str(pickles_path.joinpath('words_list.p')))
+    # write_pickle_file(words_freq, str(pickles_path.joinpath('words_freq.p')))
+    # inner_logger.info(f'Done. Total {len(words_list)} words in the vocabulary.')
+
+    words_list = load_picke_file('data/pickles/words_list.p')
 
     for split_data in [(dev_csv, 'development'), (val_csv, 'validation'), (eval_csv, 'evaluation')]:
 
@@ -131,7 +133,8 @@ def _create_split_data(split_csv, split_dir, audio_dir, words_list):
 
         audio, _ = librosa.load(audio_dir.joinpath(audio_file_name), sr=sr)
 
-        feature = librosa.feature.melspectrogram(y=audio, sr=sr, n_fft=n_fft, hop_length=hop_length,
+        feature = librosa.feature.melspectrogram(y=audio, sr=sr, n_fft=n_fft,
+                                                 hop_length=hop_length,
                                                  n_mels=n_mels, window=window)
         feature = librosa.power_to_db(feature).T
 

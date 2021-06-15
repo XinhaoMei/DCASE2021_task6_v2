@@ -94,7 +94,6 @@ def decode_output(predicted_output, ref_captions, file_names, words_list, output
 
     captions_pred, captions_gt, f_names = [], [], []
 
-
     for pred_words, ref_cap, f_name in zip(predicted_output, ref_captions, file_names):
         pred_cap = [words_list[i] for i in pred_words]
 
@@ -112,8 +111,8 @@ def decode_output(predicted_output, ref_captions, file_names, words_list, output
 
         if f_name not in f_names:
             f_names.append(f_name)
-            captions_pred.append({'file_name':f_name,'caption_predicted': pred_cap})
-            captions_gt.append({'file_name':f_name,'caption_1': gt_cap})
+            captions_pred.append({'file_name': f_name, 'caption_predicted': pred_cap})
+            captions_gt.append({'file_name': f_name, 'caption_1': gt_cap})
         else:
             for index, gt_dict in enumerate(captions_gt):
                 if f_name == gt_dict['file_name']:

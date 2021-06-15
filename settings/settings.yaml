@@ -25,12 +25,6 @@ encoder:
   freeze: No
   pretrained: Yes
 
-
-dcasenet:
-  use: Yes
-  path: 'pretrained_models/encoder/best_SED.pt'
-
-
 word_embedding:
   pretrained: No
   freeze: Yes
@@ -47,7 +41,7 @@ data:
 training:
   mixup: No
   alpha: 0.2
-  label_smoothing: No
+  label_smoothing: Yes
   keyword: No
   spec_augmentation: Yes
   epochs: 30
@@ -59,7 +53,7 @@ training:
 finetune:
   audiocap: No
   lr: !!float 1e-4
-  model: "outputs/audiocaps/audio_exp1_Cnn10_random/model/model_30.pt"
+  model: "pretrained_models/models/submission1/best_model.pt"
   epochs: 20
 
 
@@ -71,12 +65,15 @@ path:
     words_list: 'audiocaps/pickles/words_list.p'
     words_freq: 'audiocaps/pickles/words_freq.p' 
   encoder: 'pretrained_models/encoder/'
-  word2vec: 'pretrained_models/word2vec/w2v.model'
-  model: 'outputs/submission1/audio_exp_random_mixture/model/best_model.pt'
+  word2vec: 'pretrained_models/word2vec/w2v_all_vocabulary.model'
+  model: 'pretrained_models/models/submission1/best_model.pt'
 
 
 rl:
   mode: 'greedy'  # 'beam'
   epochs: 25
-  model: "outputs/spec/audio_exp1_Cnn10_random_mixture/modelmodel_29.pt"
-  lr: !!float 1e-5
+  model: "pretrained_models/models/submission1/best_model.pt"
+  lr: !!float 1e-4
+
+test:
+  model: ''

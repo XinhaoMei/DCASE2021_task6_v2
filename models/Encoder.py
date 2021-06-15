@@ -35,18 +35,18 @@ class ConvBlock(nn.Module):
         super(ConvBlock, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels=in_channels,
-                                out_channels=out_channels,
-                                kernel_size=(3, 3),
-                                stride=(1, 1),
-                                padding=(1, 1),
-                                bias=False)
+                               out_channels=out_channels,
+                               kernel_size=(3, 3),
+                               stride=(1, 1),
+                               padding=(1, 1),
+                               bias=False)
 
         self.conv2 = nn.Conv2d(in_channels=out_channels,
-                                out_channels=out_channels,
-                                kernel_size=(3, 3),
-                                stride=(1, 1),
-                                padding=(1, 1),
-                                bias=False)
+                               out_channels=out_channels,
+                               kernel_size=(3, 3),
+                               stride=(1, 1),
+                               padding=(1, 1),
+                               bias=False)
 
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -97,19 +97,32 @@ class Cnn10(nn.Module):
             fmin = config.wave.fmin
             fmax = config.wave.fmax
 
-            self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_length,
-                win_length=window_size, window='hann', center=True, pad_mode='reflect',
-                freeze_parameters=True)
+            self.spectrogram_extractor = Spectrogram(n_fft=window_size,
+                                                     hop_length=hop_length,
+                                                     win_length=window_size,
+                                                     window='hann',
+                                                     center=True,
+                                                     pad_mode='reflect',
+                                                     freeze_parameters=True)
 
             self.logmel_extractor = LogmelFilterBank(sr=sr, n_fft=window_size,
-                n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=1.0, amin=1e-10, top_db=None,
-                freeze_parameters=True)
+                                                     n_mels=mel_bins,
+                                                     fmin=fmin,
+                                                     fmax=fmax,
+                                                     ref=1.0,
+                                                     amin=1e-10,
+                                                     top_db=None,
+                                                     freeze_parameters=True)
 
         self.is_spec_augment = config.training.spec_augmentation
 
         if self.is_spec_augment:
-            self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,
-                                                    freq_drop_width=8, freq_stripes_num=2, mask_type='zero_value')
+            self.spec_augmenter = SpecAugmentation(time_drop_width=64,
+                                                   time_stripes_num=2,
+                                                   freq_drop_width=8,
+                                                   freq_stripes_num=2,
+                                                   mask_type='zero_value')
+
         self.conv_block1 = ConvBlock(in_channels=1, out_channels=64)
         self.conv_block2 = ConvBlock(in_channels=64, out_channels=128)
         self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
@@ -168,6 +181,8 @@ class Cnn14(nn.Module):
 
         self.input_data = config.data.input_field_name
 
+        self.bn0 = nn.BatchNorm2d(64)
+
         if self.input_data == 'audio_data':
             sr = config.wave.sr
             window_size = config.wave.window_size
@@ -176,20 +191,34 @@ class Cnn14(nn.Module):
             fmin = config.wave.fmin
             fmax = config.wave.fmax
 
-            self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_length,
-                win_length=window_size, window='hann', center=True, pad_mode='reflect',
-                freeze_parameters=True)
+            self.spectrogram_extractor = Spectrogram(n_fft=window_size,
+                                                     hop_length=hop_length,
+                                                     win_length=window_size,
+                                                     window='hann',
+                                                     center=True,
+                                                     pad_mode='reflect',
+                                                     freeze_parameters=True)
 
             self.logmel_extractor = LogmelFilterBank(sr=sr, n_fft=window_size,
-                n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=1.0, amin=1e-10, top_db=None,
-                freeze_parameters=True)
+                                                     n_mels=mel_bins,
+                                                     fmin=fmin,
+                                                     fmax=fmax,
+                                                     ref=1.0,
+                                                     amin=1e-10,
+                                                     top_db=None,
+                                                     freeze_parameters=True)
 
         self.is_spec_augment = config.training.spec_augmentation
-        self.bn0 = nn.BatchNorm2d(64)
+
+        self.is_spec_augment = config.training.spec_augmentation
 
         if self.is_spec_augment:
-            self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,
-                                                    freq_drop_width=8, freq_stripes_num=2, mask_type='zero_value')
+            self.spec_augmenter = SpecAugmentation(time_drop_width=64,
+                                                   time_stripes_num=2,
+                                                   freq_drop_width=8,
+                                                   freq_stripes_num=2,
+                                                   mask_type='zero_value')
+
         self.conv_block1 = ConvBlock(in_channels=1, out_channels=64)
         self.conv_block2 = ConvBlock(in_channels=64, out_channels=128)
         self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
@@ -206,7 +235,7 @@ class Cnn14(nn.Module):
         init_bn(self.bn0)
         init_layer(self.fc1)
 
-    def forward(self, input):
+    def forward(self, input, mixup_param=None):
         """ input: (batch_size, time_steps, mel_bins)"""
 
         if self.input_data == 'audio_data':
@@ -214,6 +243,10 @@ class Cnn14(nn.Module):
             x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
         else:
             x = input.unsqueeze(1)  # (batch_size, 1, time_steps, mel_bins)
+
+        if mixup_param is not None:
+            lam, index = mixup_param
+            x = lam * x + (1 - lam) * x[index]
 
         x = x.transpose(1, 3)
         x = self.bn0(x)
@@ -236,7 +269,7 @@ class Cnn14(nn.Module):
         x = F.dropout(x, p=0.2, training=self.training)
 
         x = torch.mean(x, dim=3)  # average in the frequency domain (batch_size, channel, time)
-        
+
         x = x.permute(2, 0, 1)  # time x batch x channel (2048)
         x = F.relu_(self.fc1(x))
         x = F.dropout(x, p=0.2, training=self.training)

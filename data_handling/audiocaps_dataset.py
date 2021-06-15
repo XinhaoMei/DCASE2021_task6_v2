@@ -60,15 +60,15 @@ class AudioCapsDataset(Dataset):
 
 
 def get_audiocaps_loader(split,
-                      batch_size,
-                      shuffle=False,
-                      drop_last=False,
-                      num_workers=1):
+                         batch_size,
+                         shuffle=False,
+                         drop_last=False,
+                         num_workers=1):
     dataset = AudioCapsDataset(split)
 
     return DataLoader(dataset=dataset, batch_size=batch_size,
-                    shuffle=shuffle, drop_last=drop_last,
-                    num_workers=num_workers, collate_fn=audiocaps_collate_fn)
+                      shuffle=shuffle, drop_last=drop_last,
+                      num_workers=num_workers, collate_fn=audiocaps_collate_fn)
 
 
 def audiocaps_collate_fn(batch):

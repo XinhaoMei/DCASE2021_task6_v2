@@ -79,7 +79,6 @@ def train():
     elasped_time = end_time - start_time
     epoch_loss = batch_losses.mean()
     current_lr = [param_group['lr'] for param_group in optimizer.param_groups][0]
-
     main_logger.info('epoch: {}, train_loss: {:.4f}, time elapsed: {:.4f}, lr:{:02.2e}'.format(epoch, epoch_loss, elasped_time, current_lr))
 
 
@@ -117,7 +116,7 @@ def eval_greedy(data, max_len=30):
         captions_pred, captions_gt = decode_output(y_hat_all, ref_captions_all, file_names_all, words_list, log_output_dir)
         greedy_metrics = evaluate_metrics(captions_pred, captions_gt)
         spider = greedy_metrics['spider']['score']
-        cider = greedy_metrics['cider']['score']
+        cider = greedy_metrics['Cider']['score']
         main_logger.info(f'cider: {cider:7.4f}')
         main_logger.info(f'Spider score using greedy search: {spider:7.4f}, eval time: {eval_time:.4f}')
 
@@ -160,19 +159,22 @@ def eval_beam(data, beam_size, max_len=30):
         main_logger.info(f'cider: {cider:7.4f}')
         main_logger.info(f'Spider score using beam search (beam size:{beam_size}): {spider:7.4f}, eval time: {eval_time:.4f}')
         spiders.append(spider)
-        if config.mode is not 'eval':
-            spiders.append(spider)
-            if spider >= max(spiders):
-                torch.save({
-                        "model": model.state_dict(),
+        if beam_size == 3 and (epoch % 5) == 0:
+            for metric, values in beam_metrics.items():
+                main_logger.info(f'beam search (size 3): {metric:<7s}: {values["score"]:7.4f}')
+        spiders.append(spider)
+        if spider >= max(spiders):
+            torch.save({"model": model.state_dict(),
                         "optimizer": optimizer.state_dict(),
                         "beam_size": beam_size,
-                        "epoch": epoch,
-                        }, str(model_output_dir) + '/best_model.pt'.format(epoch))
+                        "epoch": epoch},
+                        str(model_output_dir) + '/best_model.pt'.format(epoch))
+
 
 parser = argparse.ArgumentParser(description='Finetune using Reinforcement learning')
 
 parser.add_argument('-n', '--exp_name', type=str, default='exp1', help='name of the experiment')
+
 args = parser.parse_args()
 
 config = get_config()
@@ -189,19 +191,22 @@ log_output_dir.mkdir(parents=True, exist_ok=True)
 
 logger.remove()
 
-logger.add(sys.stdout, format='{time: YYYY-MM-DD at HH:mm:ss} | {message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 1)
+logger.add(sys.stdout, format='{time: YYYY-MM-DD at HH:mm:ss} | {message}',
+           level='INFO', filter=lambda record: record['extra']['indent'] == 1)
 
-logger.add(log_output_dir.joinpath('output.txt'), format='{time: YYYY-MM-DD at HH:mm:ss} | {message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 1)
+logger.add(log_output_dir.joinpath('output.txt'),
+           format='{time: YYYY-MM-DD at HH:mm:ss} | {message}', level='INFO',
+           filter=lambda record: record['extra']['indent'] == 1)
 
-logger.add(str(log_output_dir) + '/captions.txt', format='{message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 2,
-            rotation=rotation_logger)
+logger.add(str(log_output_dir) + '/captions.txt',
+           format='{message}', level='INFO',
+           filter=lambda record: record['extra']['indent'] == 2,
+           rotation=rotation_logger)
 
-logger.add(str(log_output_dir) + '/beam_captions.txt', format='{message}', level='INFO',
-            filter=lambda record: record['extra']['indent'] == 3,
-            rotation=rotation_logger)
+logger.add(str(log_output_dir) + '/beam_captions.txt',
+           format='{message}', level='INFO',
+           filter=lambda record: record['extra']['indent'] == 3,
+           rotation=rotation_logger)
 
 main_logger = logger.bind(indent=1)
 
@@ -212,7 +217,8 @@ device, device_name = (torch.device('cuda'), torch.cuda.get_device_name(torch.cu
 main_logger.info('Finetune using Reinforcement Learning.')
 main_logger.info(f'Process on {device_name}')
 
-words_list_path = 'data/pickles/new_words_list.p'
+words_list_path = config.path.clotho.words_list
+# words_list_path = 'data/pickles/new_words_list.p'
 words_list = load_picke_file(words_list_path)
 ntokens = len(words_list)
 sos_ind = words_list.index('<sos>')
@@ -226,11 +232,11 @@ model.to(device)
 model.load_state_dict(pretrained_model)
 
 main_logger.info('Training settings:\n'
-            f'{printer.pformat(config)}')
+                 f'{printer.pformat(config)}')
 
 main_logger.info(f'Model:\n{model}\n')
 main_logger.info('Total number of parameters:'
-            f'{sum([i.numel() for i in model.parameters()])}')
+                 f'{sum([i.numel() for i in model.parameters()])}')
 
 batch_size = config.data.batch_size
 num_workers = config.data.num_workers
@@ -245,6 +251,12 @@ training_data = get_clotho_loader(split='development',
                                   drop_last=True,
                                   num_workers=num_workers)
 
+# validation_data = get_clotho_loader(split='validation',
+#                                     input_field_name=input_field_name,
+#                                     load_into_memory=False,
+#                                     batch_size=batch_size,
+#                                     num_workers=num_workers)
+
 evaluation_data = get_clotho_loader(split='evaluation',
                                     input_field_name=input_field_name,
                                     load_into_memory=False,
@@ -256,21 +268,29 @@ main_logger.info(f'Len of training data: {len(training_data)}')
 main_logger.info(f'Len of evaluation data: {len(evaluation_data)}')
 
 optimizer = torch.optim.Adam(params=model.parameters(), lr=config.rl.lr, weight_decay=1e-6)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
-scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler)
+# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.1)
+# scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler)
 
-optimizer.zero_grad()
-optimizer.step()
+# optimizer.zero_grad()
+# optimizer.step()
 
 epochs = config.rl.epochs
 ep = 1
 spiders = []
 
+epoch = 0
+main_logger.info('Evaluating baseline performance...')
+eval_greedy(evaluation_data)
+eval_beam(evaluation_data, beam_size=2)
+eval_beam(evaluation_data, beam_size=3)
+eval_beam(evaluation_data, beam_size=4)
+eval_beam(evaluation_data, beam_size=5)
+
 main_logger.info(f'Optimize {config.rl.mode} search.')
 
 for epoch in range(ep, epochs + 1):
 
-    scheduler_warmup.step(epoch)
+    # scheduler_warmup.step(epoch)
 
     main_logger.info(f'Finetune using RL epoch {epoch}...')
     train()
@@ -279,5 +299,5 @@ for epoch in range(ep, epochs + 1):
     eval_beam(evaluation_data, beam_size=2)
     eval_beam(evaluation_data, beam_size=3)
     eval_beam(evaluation_data, beam_size=4)
-#    eval_beam(evaluation_data, beam_size=5)
+    eval_beam(evaluation_data, beam_size=5)
 main_logger.info('Finetune done.')

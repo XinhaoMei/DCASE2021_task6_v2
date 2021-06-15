@@ -3,7 +3,7 @@
 # @Author  : Xinhao Mei @CVSSP, University of Surrey
 # @E-mail  : x.mei@surrey.ac.uk
 
-from pathlib import Path
+
 import csv
 import pickle
 

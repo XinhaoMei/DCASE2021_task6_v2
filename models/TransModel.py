@@ -9,8 +9,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from torch.nn import TransformerEncoder, TransformerEncoderLayer, TransformerDecoder, TransformerDecoderLayer
-from models.Encoder import init_layer, Cnn10, Cnn14
+from torch.nn import TransformerEncoder, TransformerEncoderLayer,\
+TransformerDecoder, TransformerDecoderLayer
+from models.Encoder import Cnn10, Cnn14
 from models.LinearModule import AudioLinear
 
 
@@ -85,8 +86,7 @@ class TransformerModel(nn.Module):
             self.feature_extractor.load_state_dict(dict_new)
         if config.encoder.freeze:
             for name, p in self.feature_extractor.named_parameters():
-                if 'fc' not in name:
-                    p.requires_grad = False
+                p.requires_grad = False
 
         # decoder settings
         self.decoder_only = config.decoder.decoder_only
@@ -168,9 +168,9 @@ class TransformerModel(nn.Module):
             tgt = lam * tgt + (1 - lam) * tgt[:, index]
 
         tgt = self.pos_encoder(tgt)
-        output = self.transformer_decoder(tgt, mem, 
-                                          memory_mask=input_mask, 
-                                          tgt_mask=target_mask, 
+        output = self.transformer_decoder(tgt, mem,
+                                          memory_mask=input_mask,
+                                          tgt_mask=target_mask,
                                           tgt_key_padding_mask=target_padding_mask)
         output = self.dec_fc(output)
 
@@ -180,9 +180,9 @@ class TransformerModel(nn.Module):
 
         mem = self.encode(src, mixup_param)
         output = self.decode(mem, tgt, mixup_param,
-                            input_mask=input_mask,
-                            target_mask=target_mask,
-                            target_padding_mask=target_padding_mask)
+                             input_mask=input_mask,
+                             target_mask=target_mask,
+                             target_padding_mask=target_padding_mask)
         return output
 
 
