@@ -3,8 +3,7 @@
 ## Set up environment
 
 * Clone the repository: `git clone https://github.com/XinhaoMei/DCASE2021_task6_v2.git`
-* Install dependencies: `pip install -r requirement.txt`
-* Install warmup package: `pip install git+https://github.com/ildoonet/pytorch-gradual-warmup-lr.git` 
+* Create conda environment with dependencies: `conda create -f environment.yml -n name`
 * If you encounter with the `OSError: sndfile library not found `, please try `conda install -c conda-forge libsndfile`
 
 ## Set up dataset 
