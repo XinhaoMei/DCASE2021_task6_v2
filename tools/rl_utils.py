@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# @Author  : Xinhao Mei @CVSSP, University of Surrey
+# @Author  : Xinhao Mei @CVSSP, University of Surrey, Gengyun Chen @ NJPTU
 # @E-mail  : x.mei@surrey.ac.uk
 
 ''' Code for rl adapted from https://github.com/wsntxxn/DCASE2020T6 '''
