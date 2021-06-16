@@ -1,4 +1,4 @@
-# Improved Audio Captioning System Based on Transformer and Transfer Learning for DCASE Challeng 2021 Task 6
+# AN ENCODER-DECODER BASED AUDIO CAPTIONING SYSTEM WITH TRANSFER AND REINFORCEMENT LEARNING FOR DCASE CHALLENGE 2021 TASK 6
 
 ## Set up environment
 
