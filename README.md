@@ -5,6 +5,7 @@
 * Clone the repository: `git clone https://github.com/XinhaoMei/DCASE2021_task6_v2.git`
 * Create conda environment with dependencies: `conda create -f environment.yml -n name`
 * If you encounter with the `OSError: sndfile library not found `, please try `conda install -c conda-forge libsndfile`
+* All of our experiments are running on RTX 3090 with CUDA11. This envirionment just works for RTX 30x GPUs.
 
 ## Set up dataset 
 
