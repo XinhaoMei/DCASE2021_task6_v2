@@ -189,7 +189,7 @@ def test_beam(beam_size, max_len=30):
         with open('test_output.csv', 'w') as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(['file_name', 'caption_predicted'])
-            for src, file_names in tqdm(enumerate(test_data), total=len(test_data)):
+            for src, file_names in tqdm(test_data, total=len(test_data)):
                 src = src.to(device)
                 output = beam_search(model, src, sos_ind=sos_ind, eos_ind=eos_ind, beam_size=beam_size)
 
@@ -436,11 +436,11 @@ elif config.mode == 'eval':
     main_logger.info('Evaluation done.')
 
 elif config.mode == 'test':
-    test_dataset = get_test_loader(load_into_memory=False,
-                                   batch_size=32,
-                                   shuffle=False,
-                                   drop_last=False,
-                                   num_workers=8)
+    test_data = get_test_loader(load_into_memory=False,
+                                batch_size=32,
+                                shuffle=False,
+                                drop_last=False,
+                                num_workers=8)
     eval_model = torch.load(config.test.model)['model']
     model.load_state_dict(eval_model)
     test_beam(beam_size=3)
