@@ -29,7 +29,9 @@
 
 ## Cite
 
-if you use our code, please kindly cite following:
+For more details, please refer to our technical report [(pdf)](http://dcase.community/documents/challenge2021/technical_reports/DCASE2021_Mei_88_t6.pdf).
+
+If you use our code, please kindly cite following:
 
 ```
 @techreport{xinhao2021_t6,
