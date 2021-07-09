@@ -17,10 +17,17 @@
 
 * Run `coco_caption/get_stanford_models.sh` to download the libraries necessary for evaluating the metrics.
 
-## Run experiment 
+## Run experiments 
 
-* Set the parameters you want in `settings/settings.yaml`
+### Cross-entropy training
+
+* Set the parameters you want in `settings/settings.yaml` 
 * Run experiments: `python train.py -n exp_name`
+
+### Reinforcement learning training
+
+* Set settings in `rl` block in `settings/settings.yaml` 
+* Run: `python finetune_rl.py -n exp_name` 
 
 ## Reproduce results 
 
