@@ -168,18 +168,21 @@ def eval_beam(data, beam_size, max_len=30):
         cider = beam_metrics['cider']['score']
         main_logger.info(f'Cider: {cider:7.4f}')
         main_logger.info(f'Spider score using beam search (beam size:{beam_size}): {spider:7.4f}, eval time: {eval_time:.4f}')
-        if beam_size == 3 and (epoch % 5) == 0:
-            for metric, values in beam_metrics.items():
-                main_logger.info(f'beam search (size 3): {metric:<7s}: {values["score"]:7.4f}')
         if config.mode != 'eval':
+            if beam_size == 3 and (epoch % 5) == 0:
+                for metric, values in beam_metrics.items():
+                    main_logger.info(f'beam search (size 3): {metric:<7s}: {values["score"]:7.4f}')
             spiders.append(spider)
             if spider >= max(spiders):
-                torch.save({
-                        "model": model.state_dict(),
-                        "optimizer": optimizer.state_dict(),
-                        "beam_size": beam_size,
-                        "epoch": epoch,
-                        }, str(model_output_dir) + '/best_model.pt'.format(epoch))
+                torch.save({"model": model.state_dict(),
+                            "optimizer": optimizer.state_dict(),
+                            "beam_size": beam_size,
+                            "epoch": epoch},
+                            str(model_output_dir) + '/best_model.pt'.format(epoch))
+        else:
+            eval_spiders.append(spider)
+            if spider >= max(eval_spiders):
+                eval_metrics.update(beam_metrics)
 
 
 def test_beam(beam_size, max_len=30):
@@ -424,6 +427,8 @@ elif config.mode == 'finetune':
 
 elif config.mode == 'eval':
 
+    eval_spiders = []
+    eval_metrics = {}
     main_logger.info('Evaluation mode.')
 
     model.load_state_dict(torch.load(config.path.model)['model'])
@@ -434,6 +439,8 @@ elif config.mode == 'eval':
     eval_beam(evaluation_data, beam_size=4)
     eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Evaluation done.')
+    for metric, values in eval_metrics.items():
+        main_logger.info(f'best metric: {metric:<7s}: {values["score"]:7.4f}')
 
 elif config.mode == 'test':
     test_data = get_test_loader(load_into_memory=False,
