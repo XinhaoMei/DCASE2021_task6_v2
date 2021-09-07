@@ -57,9 +57,9 @@ def train():
             mixed_y_hat = mixed_y_hat[:, :tgt_a.size()[1], :]
 
             loss_a = criterion(mixed_y_hat.contiguous().view(-1, mixed_y_hat.size()[-1]),
-                                tgt_a.contiguous().view(-1))
+                               tgt_a.contiguous().view(-1))
             loss_b = criterion(mixed_y_hat.contiguous().view(-1, mixed_y_hat.size()[-1]),
-                                tgt_b.contiguous().view(-1))
+                               tgt_b.contiguous().view(-1))
 
             loss_mixup = lam * loss_a + (1 - lam) * loss_b
 
@@ -73,7 +73,7 @@ def train():
         y_hat = y_hat[:, :tgt.size()[1], :]
 
         loss = criterion(y_hat.contiguous().view(-1, y_hat.size()[-1]),
-                        tgt.contiguous().view(-1))
+                         tgt.contiguous().view(-1))
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.training.clip_grad)

@@ -61,6 +61,6 @@ print(f'{len(clotho_captions)} captions(sentences) in total to be trained.')
 
 print('Start training the model')
 # train the model
-model = Word2Vec(clotho_captions, size=128, min_count=1, window=3, iter=1000)
+model = Word2Vec(clotho_captions, vector_size=128, min_count=1, window=3, epochs=1000)
 print('Training finished.\n')
 model.save('w2v.model')
