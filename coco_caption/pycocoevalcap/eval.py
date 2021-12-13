@@ -22,7 +22,7 @@ class COCOEvalCap:
         self.cocoRes = cocoRes
         self.params = {'audio_id': coco.getAudioIds()}
 
-    def evaluate(self, verbose=False):
+    def evaluate(self, verbose=True):
         audioIds = self.params['audio_id']
         # audioIds = self.coco.getAudioIds()
         gts = {}
