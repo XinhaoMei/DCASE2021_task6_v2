@@ -16,9 +16,10 @@ from data_handling.clotho_dataset import get_clotho_loader
 from data_handling.audiocaps_dataset import get_audiocaps_loader
 from data_handling.test_dataset import get_test_loader
 from tools.config_loader import get_config
+from tools.beam import beam_decode
 from tools.utils import setup_seed, align_word_embedding, \
 LabelSmoothingLoss, set_tgt_padding_mask, rotation_logger, \
-decode_output, beam_search, greedy_decode, mixup_data
+decode_output, greedy_decode, mixup_data
 from tools.file_io import load_picke_file
 from models.TransModel import TransformerModel
 from pprint import PrettyPrinter
@@ -144,16 +145,18 @@ def eval_beam(data, beam_size, max_len=30):
 
             src, tgt, f_names, tgt_len, captions = eval_batch
             src = src.to(device)
-            output = beam_search(model, src, sos_ind=sos_ind, eos_ind=eos_ind, beam_size=beam_size)
+            output = beam_decode(src, model, sos_ind, eos_ind, beam_width=beam_size)
 
-            y_hat_batch = torch.zeros([src.shape[0], max_len]).fill_(eos_ind).to(device)
+            output = output[:, 1:].int()
+            y_hat_batch = torch.zeros(output.shape).fill_(eos_ind).to(device)
 
-            for i, o in enumerate(output):    # batch_size
-                o = o[1:]
-                for j in range(max_len - 1):
-                    y_hat_batch[i, j] = o[j]
-                    if o[j] == eos_ind:
+            for i in range(output.shape[0]):  # batch_size
+                for j in range(output.shape[1]):
+                    y_hat_batch[i, j] = output[i, j]
+                    if output[i, j] == eos_ind:
                         break
+                    elif j == output.shape[1] - 1:
+                        y_hat_batch[i, j] = eos_ind
 
             y_hat_batch = y_hat_batch.int()
             y_hat_all.extend(y_hat_batch.cpu())
@@ -363,16 +366,12 @@ if config.mode == 'train':
         eval_greedy(evaluation_data)
         eval_beam(evaluation_data, beam_size=2)
         eval_beam(evaluation_data, beam_size=3)
-        eval_beam(evaluation_data, beam_size=4)
-        eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Training done.')
     model.load_state_dict(torch.load(str(model_output_dir) + '/best_model.pt')['model'])
     main_logger.info('Metrcis on evaluation set')
     eval_greedy(evaluation_data)
     eval_beam(evaluation_data, beam_size=2)
     eval_beam(evaluation_data, beam_size=3)
-    eval_beam(evaluation_data, beam_size=4)
-    eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Evaluation done.')
 
 elif config.mode == 'finetune':
@@ -413,16 +412,12 @@ elif config.mode == 'finetune':
         eval_greedy(evaluation_data)
         eval_beam(evaluation_data, beam_size=2)
         eval_beam(evaluation_data, beam_size=3)
-        eval_beam(evaluation_data, beam_size=4)
-        eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Finetune done.')
     model.load_state_dict(torch.load(str(model_output_dir) + '/best_model.pt')['model'])
     main_logger.info('Metrcis on evaluation set')
     eval_greedy(evaluation_data)
     eval_beam(evaluation_data, beam_size=2)
     eval_beam(evaluation_data, beam_size=3)
-    eval_beam(evaluation_data, beam_size=4)
-    eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Evaluation done.')
 
 elif config.mode == 'eval':
@@ -436,8 +431,6 @@ elif config.mode == 'eval':
     eval_greedy(evaluation_data)
     eval_beam(evaluation_data, beam_size=2)
     eval_beam(evaluation_data, beam_size=3)
-    eval_beam(evaluation_data, beam_size=4)
-    eval_beam(evaluation_data, beam_size=5)
     main_logger.info('Evaluation done.')
     for metric, values in eval_metrics.items():
         main_logger.info(f'best metric: {metric:<7s}: {values["score"]:7.4f}')

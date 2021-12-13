@@ -13,11 +13,12 @@ from loguru import logger
 import argparse
 from tqdm import tqdm
 from pathlib import Path
+from tools.beam import beam_decode
 from data_handling.clotho_dataset import get_clotho_loader
 from tools.config_loader import get_config
 from tools.utils import setup_seed, align_word_embedding, \
 set_tgt_padding_mask, rotation_logger, \
-decode_output, beam_search, greedy_decode
+decode_output, greedy_decode
 from tools.file_io import load_picke_file
 from models.TransModel import TransformerModel
 from pprint import PrettyPrinter
@@ -40,7 +41,7 @@ def train():
         model.eval()
         with torch.no_grad():
             if config.rl.mode == 'beam':
-                output = beam_search(model, src, beam_size=2)
+                output = beam_decode(src, model, sos_ind, eos_ind, beam_width=2)
                 out_tensor = torch.zeros(len(output), max_len).fill_(eos_ind)
 
                 for i in range(len(output)):
@@ -134,16 +135,18 @@ def eval_beam(data, beam_size, max_len=30):
 
             src, tgt, f_names, tgt_len, captions = eval_batch
             src = src.to(device)
-            output = beam_search(model, src, beam_size=beam_size)
+            output = beam_decode(src, model, sos_ind, eos_ind, beam_width=beam_size)
 
-            y_hat_batch = torch.zeros([src.shape[0], max_len]).fill_(eos_ind).to(device)
+            output = output[:, 1:].int()
+            y_hat_batch = torch.zeros(output.shape).fill_(eos_ind).to(device)
 
-            for i, o in enumerate(output):    # batch_size
-                o = o[1:]
-                for j in range(max_len - 1):
-                    y_hat_batch[i, j] = o[j]
-                    if o[j] == eos_ind:
+            for i in range(output.shape[0]):  # batch_size
+                for j in range(output.shape[1]):
+                    y_hat_batch[i, j] = output[i, j]
+                    if output[i, j] == eos_ind:
                         break
+                    elif j == output.shape[1] - 1:
+                        y_hat_batch[i, j] = eos_ind
 
             y_hat_batch = y_hat_batch.int()
             y_hat_all.extend(y_hat_batch.detach().cpu())
