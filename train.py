@@ -18,7 +18,7 @@ from tools.config_loader import get_config
 from tools.beam import beam_decode
 from tools.utils import setup_seed, align_word_embedding, \
 LabelSmoothingLoss, set_tgt_padding_mask, rotation_logger, \
-decode_output, greedy_decode, mixup_data
+decode_output, greedy_decode
 from tools.file_io import load_picke_file
 from models.TransModel import TransformerModel
 from pprint import PrettyPrinter
@@ -44,29 +44,6 @@ def train():
 
         optimizer.zero_grad()
 
-        if config.training.mixup:
-
-            # mixup on spectrogram
-            tgt_a, tgt_b, lam, index = mixup_data(tgt, alpha=config.training.alpha)
-            mixup_param = [lam, index]
-            mixed_y_hat = model(src, tgt, mixup_param=mixup_param, target_padding_mask=tgt_pad_mask)
-
-            tgt_a = tgt_a[:, 1:]
-            tgt_b = tgt_b[:, 1:]
-            mixed_y_hat = mixed_y_hat.transpose(0, 1)
-            mixed_y_hat = mixed_y_hat[:, :tgt_a.size()[1], :]
-
-            loss_a = criterion(mixed_y_hat.contiguous().view(-1, mixed_y_hat.size()[-1]),
-                               tgt_a.contiguous().view(-1))
-            loss_b = criterion(mixed_y_hat.contiguous().view(-1, mixed_y_hat.size()[-1]),
-                               tgt_b.contiguous().view(-1))
-
-            loss_mixup = lam * loss_a + (1 - lam) * loss_b
-
-            loss_mixup.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.training.clip_grad)
-            optimizer.step()
-
         y_hat = model(src, tgt, target_padding_mask=tgt_pad_mask)
         tgt = tgt[:, 1:]
         y_hat = y_hat.transpose(0, 1)  # batch x words_len x ntokens
@@ -79,10 +56,7 @@ def train():
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.training.clip_grad)
         optimizer.step()
 
-        if config.training.mixup:
-            batch_losses[batch_idx] = (loss.cpu().item() + loss_mixup.cpu().item()) / 2
-        else:
-            batch_losses[batch_idx] = loss.cpu().item()
+        batch_losses[batch_idx] = loss.cpu().item()
 
     end_time = time.time()
     elasped_time = end_time - start_time
