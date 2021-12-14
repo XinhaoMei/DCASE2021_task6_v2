@@ -13,7 +13,6 @@ import argparse
 from tqdm import tqdm
 from pathlib import Path
 from data_handling.clotho_dataset import get_clotho_loader
-from data_handling.audiocaps_dataset import get_audiocaps_loader
 from data_handling.test_dataset import get_test_loader
 from tools.config_loader import get_config
 from tools.beam import beam_decode
@@ -197,7 +196,7 @@ def test_beam(beam_size, max_len=30):
             writer.writerow(['file_name', 'caption_predicted'])
             for src, file_names in tqdm(test_data, total=len(test_data)):
                 src = src.to(device)
-                output = beam_search(model, src, sos_ind=sos_ind, eos_ind=eos_ind, beam_size=beam_size)
+                output = beam_decode(src, model, sos_ind, eos_ind, beam_width=beam_size)
 
                 output_batch = []
                 for sample in output:
@@ -270,44 +269,27 @@ num_workers = config.data.num_workers
 input_field_name = config.data.input_field_name
 
 # data loading
-if dataset == 'clotho':
-    words_list_path = config.path.clotho.words_list
-    # words_freq_path = config.path.clotho.words_freq
-    training_data = get_clotho_loader(split='development',
-                                      input_field_name=input_field_name,
-                                      load_into_memory=False,
-                                      batch_size=batch_size,
-                                      shuffle=True,
-                                      drop_last=True,
-                                      num_workers=num_workers)
+words_list_path = config.path.clotho.words_list
+# words_freq_path = config.path.clotho.words_freq
+training_data = get_clotho_loader(split='development',
+                                  input_field_name=input_field_name,
+                                  load_into_memory=False,
+                                  batch_size=batch_size,
+                                  shuffle=True,
+                                  drop_last=True,
+                                  num_workers=num_workers)
 
-    validation_data = get_clotho_loader(split='validation',
-                                        input_field_name=input_field_name,
-                                        load_into_memory=False,
-                                        batch_size=batch_size,
-                                        num_workers=num_workers)
+validation_data = get_clotho_loader(split='validation',
+                                    input_field_name=input_field_name,
+                                    load_into_memory=False,
+                                    batch_size=batch_size,
+                                    num_workers=num_workers)
 
-    evaluation_data = get_clotho_loader(split='evaluation',
-                                        input_field_name=input_field_name,
-                                        load_into_memory=False,
-                                        batch_size=batch_size,
-                                        num_workers=num_workers)
-elif dataset == 'audiocaps':
-    words_list_path = config.path.audiocaps.words_list
-    # words_freq_path = config.path.audiocaps.words_freq
-    training_data = get_audiocaps_loader(split='train',
-                                         batch_size=batch_size,
-                                         shuffle=True,
-                                         drop_last=True,
-                                         num_workers=num_workers)
-
-    validation_data = get_audiocaps_loader(split='val',
-                                           batch_size=batch_size,
-                                           num_workers=num_workers)
-
-    evaluation_data = get_audiocaps_loader(split='test',
-                                           batch_size=batch_size,
-                                           num_workers=num_workers)
+evaluation_data = get_clotho_loader(split='evaluation',
+                                    input_field_name=input_field_name,
+                                    load_into_memory=False,
+                                    batch_size=batch_size,
+                                    num_workers=num_workers)
 
 # loading vocabulary list
 if config.mode == 'finetune' and config.finetune.audiocap:
