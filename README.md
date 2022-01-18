@@ -41,23 +41,16 @@ For more details, please refer to our technical report [(pdf)](http://dcase.comm
 If you use our code, please kindly cite following:
 
 ```
-@techreport{xinhao2021_t6,
-    Author = "Mei, Xinhao and Huang, Qiushi and Liu, Xubo and Chen, Gengyun and Wu, Jingqian and Wu, Yusong and Zhao, Jinzheng and Li, Shengchen and Ko, Tom and Tang, H. Lilian and Shao, Xi and Plumbley, Mark D. and Wang, Wenwu",
-    title = "An Encoder-Decoder Based Audio Captioning System With Transfer and Reinforcement Learning for {DCASE} Challenge 2021 Task 6",
-    institution = "DCASE2021 Challenge",
+@inproceedings{Mei2021,
+    author = "Mei, Xinhao and Huang, Qiushi and Liu, Xubo and Chen, Gengyun and Wu, Jingqian and Wu, Yusong and ZHAO, Jinzheng and Li, Shengchen and Ko, Tom and Tang, H. and Shao, Xi and Plumbley, Mark D. and Wang, Wenwu",
+    title = "An Encoder-Decoder Based Audio Captioning System with Transfer and Reinforcement Learning",
+    booktitle = "Proceedings of the 6th Detection and Classification of Acoustic Scenes and Events 2021 Workshop (DCASE2021)",
+    address = "Barcelona, Spain",
+    month = "November",
     year = "2021",
-    month = "July",
-}
-```
-
-or:
-
-```
-@article{mei2021encoder,
-  title={An Encoder-Decoder Based Audio Captioning System With Transfer and Reinforcement Learning},
-  author={Mei, Xinhao and Huang, Qiushi and Liu, Xubo and Chen, Gengyun and Wu, Jingqian and Wu, Yusong and Zhao, Jinzheng and Li, Shengchen and Ko, Tom and Tang, H Lilian and others},
-  journal={arXiv preprint arXiv:2108.02752},
-  year={2021}
+    pages = "206--210",
+    isbn = "978-84-09-36072-7",
+    doi. = "10.5281/zenodo.5770113"
 }
 ```
 
