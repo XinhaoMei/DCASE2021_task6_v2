@@ -3,6 +3,7 @@
 # @Author  : Xinhao Mei @CVSSP, University of Surrey
 # @E-mail  : x.mei@surrey.ac.uk
 
+
 """
 Adapted from https://github.com/budzianowski/PyTorch-Beam-Search-Decoding,
 and https://github.com/haantran96/wavetransformer/blob/main/modules/beam.py
@@ -39,74 +40,50 @@ class BeamSearchNode(object):
         return self.logp / float(self.leng - 1 + 1e-6) + alpha * reward
 
 
-def beam_decode(x, model, sos_ind, eos_ind, beam_width=5, top_k=1):
-    """
+def beam_decode(src, model, sos_ind, eos_ind, beam_width=5, top_k=1, max_len=30):
 
-    Args:
-        x: input spectrogram (batch_size, time_frames, n_mels)
-        model:
-        sos_ind: index of '<sos>'
-        eos_ind: index of '<eos>'
-        beam_width: beam size
-        top_k: how many sentences wanted to generate
-
-    Returns:
-
-    """
     decoded_batch = []
 
-    device = x.device
-    batch_size = x.shape[0]
+    device = src.device
+    batch_size = src.shape[0]
 
-    encoded_features = model.encode(x)
-    # audio features extracted by encoder, (time_frames, batch, nhid)
+    # audio feature sequece extracted by the audio_encoder
+    encoded_feats = model.encode(src)
 
     # decoding goes sentence by sentence
     for idx in range(batch_size):
 
-        encoded_feature = encoded_features[:, idx, :].unsqueeze(1)
-        # (time_frames, 1, n_hid)
+        encoded_feat = encoded_feats[:, idx, :].unsqueeze(1)
 
-        # Start with the start of the sentence token
         decoder_input = torch.LongTensor([[sos_ind]]).to(device)
 
-        # Number of sentence to generate
         endnodes = []
-        number_required = min((top_k + 1), top_k - len(endnodes))
 
-        # starting node -  previous node, word_id (sos_ind), logp, length
-        node = BeamSearchNode(None, decoder_input, 0, 1)
+        # starting nodel
+        start_node = BeamSearchNode(None, decoder_input, 0, 1)
         nodes = PriorityQueue()
+        temp_nodes = PriorityQueue()
 
-        # start the queue
-        nodes.put((-node.eval(), node))
-        qsize = 1
+        nodes.put((-start_node.eval(), start_node))
+
+        keeped_node_width = beam_width
+        time_step = 0
 
         # start beam search
-        while True:
-            # give up when decoding takes too long
-            if qsize > 2000:
+        while time_step < max_len:
+
+            if len(endnodes) >= beam_width:
                 break
 
-            # fetch the best node
+            # remove and get the best node from the queue
+            # best means with the - log_p is lowest
             score, n = nodes.get()
-            decoder_input = n.wordid
+            decoder_input = n.wordid  # (1, seq_len) words
 
-            if n.wordid[0, -1].item() == eos_ind and n.prevNode is not None:
-                endnodes.append((score, n))
-                # if we reached maximum # of sentences required
-                if len(endnodes) >= number_required:
-                    break
-                else:
-                    continue
-
-            # decode for one step using decoder
-            decoder_output = model.decode(encoded_feature, decoder_input)
+            decoder_output = model.decode(encoded_feat, decoder_input)
             log_prob = F.log_softmax(decoder_output[-1, :], dim=-1)
 
-            # PUT HERE REAL BEAM SEARCH OF TOP
             log_prob, indexes = torch.topk(log_prob, beam_width)
-            nextnodes = []
 
             for new_k in range(beam_width):
                 decoded_t = indexes[0][new_k].view(1, -1)
@@ -114,29 +91,27 @@ def beam_decode(x, model, sos_ind, eos_ind, beam_width=5, top_k=1):
 
                 node = BeamSearchNode(n, torch.cat((decoder_input, decoded_t), dim=1), n.logp + log_p, n.leng + 1)
                 score = -node.eval()
-                nextnodes.append((score, node))
+                temp_nodes.put((score, node))
 
-            # put them into queue
-            for i in range(len(nextnodes)):
-                score, nn = nextnodes[i]
-                nodes.put((score, nn))
-                # increase qsize
-            qsize += len(nextnodes) - 1
-
-        # choose n_best paths, back trace them
-        if len(endnodes) == 0:
-            endnodes = [nodes.get() for _ in range(top_k)]
+            if nodes.qsize() == 0:
+                for _ in range(beam_width):
+                    score, node = temp_nodes.get()
+                    if node.wordid[0, -1].item() == eos_ind and n.prevNode is not None:
+                        endnodes.append((score, node))
+                        keeped_node_width -= 1
+                    else:
+                        nodes.put((score, node))
+                time_step += 1
+                if time_step == max_len and keeped_node_width != 0:
+                    for _ in range(keeped_node_width):
+                        endnodes.append(nodes.get())
+                temp_nodes = PriorityQueue()
+            else:
+                continue
 
         utterances = []
         for score, n in sorted(endnodes, key=operator.itemgetter(0)):
             utterances.append(n.wordid[0, :])
-            # # back trace
-            # while n.prevNode != None:
-            #     n = n.prevNode
-            #     utterance.append(n.wordid)
-            #
-            # utterance = utterance[::-1]
-            # utterances.append(utterance)
         for i in range(top_k):
             decoded_batch.append(utterances[i])
 

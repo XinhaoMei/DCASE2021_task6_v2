@@ -85,34 +85,30 @@ class Cnn10(nn.Module):
 
         super(Cnn10, self).__init__()
 
-        self.input_data = config.data.input_field_name
-
         self.bn0 = nn.BatchNorm2d(64)
 
-        if self.input_data == 'audio_data':
-            sr = config.wave.sr
-            window_size = config.wave.window_size
-            hop_length = config.wave.hop_length
-            mel_bins = config.wave.mel_bins
-            fmin = config.wave.fmin
-            fmax = config.wave.fmax
+        sr = config.wav.sr
+        window_size = config.wav.window_size
+        hop_length = config.wav.hop_length
+        mel_bins = config.wav.mel_bins
+        fmin = config.wav.fmin
+        fmax = config.wav.fmax
 
-            self.spectrogram_extractor = Spectrogram(n_fft=window_size,
-                                                     hop_length=hop_length,
-                                                     win_length=window_size,
-                                                     window='hann',
-                                                     center=True,
-                                                     pad_mode='reflect',
-                                                     freeze_parameters=True)
-
-            self.logmel_extractor = LogmelFilterBank(sr=sr, n_fft=window_size,
-                                                     n_mels=mel_bins,
-                                                     fmin=fmin,
-                                                     fmax=fmax,
-                                                     ref=1.0,
-                                                     amin=1e-10,
-                                                     top_db=None,
-                                                     freeze_parameters=True)
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size,
+                                                 hop_length=hop_length,
+                                                 win_length=window_size,
+                                                 window='hann',
+                                                 center=True,
+                                                 pad_mode='reflect',
+                                                 freeze_parameters=True)
+        self.logmel_extractor = LogmelFilterBank(sr=sr, n_fft=window_size,
+                                                 n_mels=mel_bins,
+                                                 fmin=fmin,
+                                                 fmax=fmax,
+                                                 ref=1.0,
+                                                 amin=1e-10,
+                                                 top_db=None,
+                                                 freeze_parameters=True)
 
         self.is_spec_augment = config.training.spec_augmentation
 
@@ -128,26 +124,21 @@ class Cnn10(nn.Module):
         self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
         self.conv_block4 = ConvBlock(in_channels=256, out_channels=512)
 
-        self.fc1 = nn.Linear(512, 512, bias=True)
+        self.fc1 = nn.Linear(512, 1024, bias=True)
+        # self.fc2 = nn.Linear(1024, 128, bias=True)
 
         self.init_weights()
 
     def init_weights(self):
-
         init_bn(self.bn0)
         init_layer(self.fc1)
+        # init_layer(self.fc2)
 
-    def forward(self, input, mixup_param=None):
+    def forward(self, input):
         """ input: (batch_size, time_steps, mel_bins)"""
 
-        if self.input_data == 'audio_data':
-            x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
-            x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
-        else:
-            x = input.unsqueeze(1)  # (batch_size, 1, time_steps, mel_bins)
-        if mixup_param is not None:
-            lam, index = mixup_param
-            x = lam * x + (1 - lam) * x[index]
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
 
         x = x.transpose(1, 3)
         x = self.bn0(x)
@@ -170,6 +161,8 @@ class Cnn10(nn.Module):
         x = x.permute(2, 0, 1)  # time x batch x channel (512)
         x = F.relu_(self.fc1(x))
         x = F.dropout(x, p=0.2, training=self.training)
+        # x = F.relu_(self.fc2(x))
+        # x = F.dropout(x, p=0.2, training=self.training)
         return x
 
 
@@ -179,36 +172,30 @@ class Cnn14(nn.Module):
 
         super(Cnn14, self).__init__()
 
-        self.input_data = config.data.input_field_name
-
         self.bn0 = nn.BatchNorm2d(64)
 
-        if self.input_data == 'audio_data':
-            sr = config.wave.sr
-            window_size = config.wave.window_size
-            hop_length = config.wave.hop_length
-            mel_bins = config.wave.mel_bins
-            fmin = config.wave.fmin
-            fmax = config.wave.fmax
+        sr = config.wave.sr
+        window_size = config.wave.window_size
+        hop_length = config.wave.hop_length
+        mel_bins = config.wave.mel_bins
+        fmin = config.wave.fmin
+        fmax = config.wave.fmax
 
-            self.spectrogram_extractor = Spectrogram(n_fft=window_size,
-                                                     hop_length=hop_length,
-                                                     win_length=window_size,
-                                                     window='hann',
-                                                     center=True,
-                                                     pad_mode='reflect',
-                                                     freeze_parameters=True)
-
-            self.logmel_extractor = LogmelFilterBank(sr=sr, n_fft=window_size,
-                                                     n_mels=mel_bins,
-                                                     fmin=fmin,
-                                                     fmax=fmax,
-                                                     ref=1.0,
-                                                     amin=1e-10,
-                                                     top_db=None,
-                                                     freeze_parameters=True)
-
-        self.is_spec_augment = config.training.spec_augmentation
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size,
+                                                 hop_length=hop_length,
+                                                 win_length=window_size,
+                                                 window='hann',
+                                                 center=True,
+                                                 pad_mode='reflect',
+                                                 freeze_parameters=True)
+        self.logmel_extractor = LogmelFilterBank(sr=sr, n_fft=window_size,
+                                                 n_mels=mel_bins,
+                                                 fmin=fmin,
+                                                 fmax=fmax,
+                                                 ref=1.0,
+                                                 amin=1e-10,
+                                                 top_db=None,
+                                                 freeze_parameters=True)
 
         self.is_spec_augment = config.training.spec_augmentation
 
@@ -226,7 +213,7 @@ class Cnn14(nn.Module):
         self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024)
         self.conv_block6 = ConvBlock(in_channels=1024, out_channels=2048)
 
-        self.fc1 = nn.Linear(2048, 512, bias=True)
+        self.fc1 = nn.Linear(2048, 1024, bias=True)
 
         self.init_weights()
 
@@ -235,18 +222,11 @@ class Cnn14(nn.Module):
         init_bn(self.bn0)
         init_layer(self.fc1)
 
-    def forward(self, input, mixup_param=None):
+    def forward(self, input):
         """ input: (batch_size, time_steps, mel_bins)"""
 
-        if self.input_data == 'audio_data':
-            x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
-            x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
-        else:
-            x = input.unsqueeze(1)  # (batch_size, 1, time_steps, mel_bins)
-
-        if mixup_param is not None:
-            lam, index = mixup_param
-            x = lam * x + (1 - lam) * x[index]
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
 
         x = x.transpose(1, 3)
         x = self.bn0(x)
@@ -275,4 +255,3 @@ class Cnn14(nn.Module):
         x = F.dropout(x, p=0.2, training=self.training)
 
         return x
-

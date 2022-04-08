@@ -1,14 +1,14 @@
 mode: 'train' # 'eval' 'test' 'finetune'
+dataset: 'Clotho'  # 'Clotho'
+sos_token: Yes
 
-
-wave:
-  sr: 44100
+wav:
+  sr: 32000
   window_size: 1024
-  hop_length: 512
+  hop_length: 320
   mel_bins: 64
   fmin: 50
   fmax: 14000
-
 
 decoder:
   decoder_only: Yes
@@ -18,7 +18,6 @@ decoder:
   dropout: 0.2
   dim_feedforward: 2048
   activation: 'gelu'
-
 
 encoder:
   model: 'Cnn10'
@@ -31,49 +30,27 @@ word_embedding:
 
 
 data:
-  type: 'clotho'  # 'clotho' 'audiocaps'
-  input_field_name: 'audio_data'  # 'feature'
   batch_size: 32
   num_workers: 8
-  load_into_memory: No
 
 
 training:
-  mixup: No
   alpha: 0.2
   label_smoothing: Yes
-  keyword: No
   spec_augmentation: Yes
   epochs: 30
   lr: !!float 1e-3
   clip_grad: 2
   seed: 20
-
-
-finetune:
-  audiocap: No
-  lr: !!float 1e-4
-  model: "pretrained_models/models/submission1/best_model.pt"
-  epochs: 20
-
+  vlad: No
 
 path:
-  clotho:
-    words_list: 'data/pickles/words_list.p'
-    words_freq: 'data/pickles/words_freq.p' 
-  audiocaps:
-    words_list: 'audiocaps/pickles/words_list.p'
-    words_freq: 'audiocaps/pickles/words_freq.p' 
-  encoder: 'pretrained_models/encoder/'
+  vocabulary: 'data/{}/pickles/words_list.p'
+  encoder: 'pretrained_models/audio_encoder/'
   word2vec: 'pretrained_models/word2vec/w2v_all_vocabulary.model'
-  model: 'pretrained_models/models/submission1/best_model.pt'
-
 
 rl:
   mode: 'greedy'  # 'beam'
   epochs: 25
   model: "pretrained_models/models/submission1/best_model.pt"
   lr: !!float 1e-4
-
-test:
-  model: ''

@@ -7,6 +7,7 @@
 import csv
 import pickle
 
+
 def write_csv_file(csv_obj, file_name):
 
     with open(file_name, 'w') as f:
@@ -24,11 +25,12 @@ def load_csv_file(file_name):
     return csv_obj
 
 
-def load_picke_file(file_name):
+def load_pickle_file(file_name):
 
     with open(file_name, 'rb') as f:
         pickle_obj = pickle.load(f)
     return pickle_obj
+
 
 def write_pickle_file(obj, file_name):
 

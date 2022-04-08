@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import random
 from loguru import logger
 from gensim.models.word2vec import Word2Vec
+from tools.file_io import load_pickle_file
 
 
 def setup_seed(seed):
@@ -21,6 +22,27 @@ def setup_seed(seed):
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     # torch.backends.cudnn.benchmark = False
+
+
+class AverageMeter(object):
+    """
+    Keeps track of most recent, average, sum, and count of a metric.
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 def rotation_logger(x, y):
@@ -39,6 +61,7 @@ def rotation_logger(x, y):
 def set_tgt_padding_mask(tgt, tgt_len):
     # tgt: (batch_size, max_len)
     # tgt_len: list() length for each caption in the batch
+
     batch_size = tgt.shape[0]
     max_len = tgt.shape[1]
     mask = torch.zeros(tgt.shape).type_as(tgt).to(tgt.device)
@@ -51,44 +74,48 @@ def set_tgt_padding_mask(tgt, tgt_len):
     return mask
 
 
-def greedy_decode(model, src, max_len=30, sos_ind=0):
+def greedy_decode(model, src, sos_ind=0, eos_ind=9, max_len=30):
 
     model.eval()
     with torch.no_grad():
         batch_size = src.shape[0]
-        mem = model.encode(src)
+        encoded_feats = model.encode(src)
 
         ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(src.device)
 
-        for i in range(max_len - 1):
-            target_mask = model.generate_square_subsequent_mask(ys.shape[1]).to(src.device)
-            out = model.decode(mem, ys, target_mask=target_mask)  # T_out, batch_size, ntoken
-            prob = model.generator(out[-1, :])
+        for i in range(max_len):
+            out = model.decode(encoded_feats, ys)  # T_out, batch_size, ntoken
+            prob = F.softmax(out[-1, :], dim=-1)
             next_word = torch.argmax(prob, dim=1)
             next_word = next_word.unsqueeze(1)
             ys = torch.cat([ys, next_word], dim=1)
     return ys
 
 
-def decode_output(predicted_output, ref_captions, file_names, words_list, output_dir, beam=False):
+def decode_output(predicted_output, ref_captions, file_names,
+                  words_list, log_output_dir, epoch, beam_size=1):
 
-    if beam:
+    if beam_size != 1:
+        logging = logger.add(str(log_output_dir) + '/beam_captions_{}ep_{}bsize.txt'.format(epoch, beam_size),
+                             format='{message}', level='INFO',
+                             filter=lambda record: record['extra']['indent'] == 3)
         caption_logger = logger.bind(indent=3)
         caption_logger.info('Captions start')
         caption_logger.info('Beam search:')
     else:
+        logging = logger.add(str(log_output_dir) + '/captions_{}ep.txt'.format(epoch),
+                             format='{message}', level='INFO',
+                             filter=lambda record: record['extra']['indent'] == 2)
         caption_logger = logger.bind(indent=2)
         caption_logger.info('Captions start')
         caption_logger.info('Greedy search:')
 
     captions_pred, captions_gt, f_names = [], [], []
 
-    for pred_words, ref_cap, f_name in zip(predicted_output, ref_captions, file_names):
-        pred_cap = [words_list[i] for i in pred_words]
+    caption_field = ['caption_{}'.format(i) for i in range(1, 6)]
 
-        ref_cap = ref_cap.strip().split()
-        ref_cap = ref_cap[1:]
-        ref_cap = ref_cap[:-1]
+    for pred_words, ref_cap_dict, f_name in zip(predicted_output, ref_captions, file_names):
+        pred_cap = [words_list[i] for i in pred_words]
 
         try:
             pred_cap = pred_cap[:pred_cap.index('<eos>')]
@@ -96,39 +123,37 @@ def decode_output(predicted_output, ref_captions, file_names, words_list, output
             pass
 
         pred_cap = ' '.join(pred_cap)
-        gt_cap = ' '.join(ref_cap)
 
-        if f_name not in f_names:
-            f_names.append(f_name)
-            captions_pred.append({'file_name': f_name, 'caption_predicted': pred_cap})
-            captions_gt.append({'file_name': f_name, 'caption_1': gt_cap})
-        else:
-            for index, gt_dict in enumerate(captions_gt):
-                if f_name == gt_dict['file_name']:
-                    len_captions = len([i_c for i_c in gt_dict.keys()
-                                        if i_c.startswith('caption_')]) + 1
-                    gt_dict.update({f'caption_{len_captions}': gt_cap})
-                    captions_gt[index] = gt_dict
-                    break
+        f_names.append(f_name)
+        captions_pred.append({'file_name': f_name, 'caption_predicted': pred_cap})
+        ref_cap_dict.update({'file_name': f_name})
+        captions_gt.append(ref_cap_dict)
+        gt_caps = [ref_cap_dict[cap_ind] for cap_ind in caption_field]
 
         log_strings = [f'Captions for file {f_name}:',
                        f'\t Predicted caption: {pred_cap}',
-                       f'\t Original caption: {gt_cap}\n\n']
+                       f'\t Original caption_1: {gt_caps[0]}',
+                       f'\t Original caption_2: {gt_caps[1]}',
+                       f'\t Original caption_3: {gt_caps[2]}',
+                       f'\t Original caption_4: {gt_caps[3]}',
+                       f'\t Original caption_5: {gt_caps[4]}']
 
         [caption_logger.info(log_string)
          for log_string in log_strings]
-
+    logger.remove(logging)
     return captions_pred, captions_gt
 
 
-def align_word_embedding(words_list, model_path, nhid):
-
+def align_word_embedding(words_list_path, model_path, nhid):
+    words_list = load_pickle_file(words_list_path)
     w2v_model = Word2Vec.load(model_path)
     ntoken = len(words_list)
-    weights = torch.randn(ntoken, nhid)
+    weights = np.zeros((ntoken, nhid))
     for i, word in enumerate(words_list):
-        embedding = w2v_model.wv[word]
-        weights[i] = torch.from_numpy(embedding).float()
+        if word != '<ukn>':
+            embedding = w2v_model.wv[word]
+            weights[i] = embedding
+    weights = torch.from_numpy(weights).float()
     return weights
 
 

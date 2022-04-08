@@ -1,91 +1,125 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# coding: utf-8
 # @Author  : Xinhao Mei @CVSSP, University of Surrey
 # @E-mail  : x.mei@surrey.ac.uk
 
+import time
+from itertools import chain
 
-import os
-import argparse
+import h5py
 import numpy as np
 import librosa
-from tqdm import tqdm
+from re import sub
 from loguru import logger
 from pathlib import Path
-from itertools import chain
-from re import sub
-from tools.file_io import load_csv_file, write_pickle_file, load_picke_file
+from tqdm import tqdm
+from tools.file_io import load_csv_file, write_pickle_file
 
 
-parser = argparse.ArgumentParser(description='Setting for dataset creation')
+def load_metadata(dataset, csv_file):
+    """Load meta data of Clotho
+    """
+    if dataset == 'AudioCaps' and 'train' in csv_file:
+        caption_field = None
+    else:
+        caption_field = ['caption_{}'.format(i) for i in range(1, 6)]
+    csv_list = load_csv_file(csv_file)
 
-parser.add_argument('--sr', type=int, default=44100, help="Sampling rate for the audio.")
-parser.add_argument('--n_fft', type=int, default=1024, help="Length of the FFT window.")
-parser.add_argument('--hop_length', type=int, default=512, help="Number of samples between successive frames.")
-parser.add_argument('--n_mels', type=int, default=64, help="Number of mel bins.")
-parser.add_argument('--window', type=str, default='hann', help='Type of window.')
+    audio_names = []
+    captions = []
+
+    for i, item in enumerate(csv_list):
+
+        audio_name = item['file_name']
+        if caption_field is not None:
+            item_captions = [_sentence_process(item[cap_ind], add_specials=False) for cap_ind in caption_field]
+        else:
+            item_captions = _sentence_process(item['caption'])
+        audio_names.append(audio_name)
+        captions.append(item_captions)
+
+    meta_dict = {'audio_name': np.array(audio_names), 'captions': np.array(captions)}
+
+    return meta_dict
 
 
-def create_dataset():
+def pack_dataset_to_hdf5(dataset):
+    """
 
-    inner_logger = logger
+    Args:
+        dataset: 'AudioCaps', 'Clotho'
 
-    inner_logger.info('Loading csv files and process each caption.')
+    Returns:
 
-    dev_csv = load_csv_file('data/csv_files/clotho_captions_development.csv')
-    val_csv = load_csv_file('data/csv_files/clotho_captions_validation.csv')
-    eval_csv = load_csv_file('data/csv_files/clotho_captions_evaluation.csv')
+    """
 
-    caption_fields = ['caption_{}'.format(i) for i in range(1, 6)]
+    splits = ['train', 'val', 'test']
+    all_captions = []
+    if dataset == 'AudioCaps':
+        sampling_rate = 32000
+        audio_duration = 10
+    elif dataset == 'Clotho':
+        sampling_rate = 44100
+        audio_duration = 30
+    else:
+        raise NotImplementedError(f'No dataset named: {dataset}')
 
-    for csv_item in chain(dev_csv, val_csv, eval_csv):
-        ''' Process each caption'''
-        captions = [_sentence_process(csv_item[caption_field], add_specials=True) for caption_field in caption_fields]
+    max_audio_length = audio_duration * sampling_rate
 
-        [csv_item.update({caption_field: caption})
-         for caption_field, caption in zip(caption_fields, captions)]
-    inner_logger.info('Done!')
+    for split in splits:
+        csv_path = 'data/{}/csv_files/{}.csv'.format(dataset, split)
+        audio_dir = 'data/{}/waveforms/{}/'.format(dataset, split)
+        hdf5_path = 'data/{}/hdf5s/{}/'.format(dataset, split)
 
-    # # all captions in dev set
-    # dev_captions = [csv_entry.get(caption_field)
-    #                     for csv_entry in dev_csv
-    #                     for caption_field in caption_fields]
+        # make dir for hdf5
+        Path(hdf5_path).mkdir(parents=True, exist_ok=True)
 
-    # inner_logger.info('Creating vocabulary and counting words frequency...')
-    # words_list, words_freq = _create_vocabulary(dev_captions)
-    # pickles_path = Path('data/pickles')
-    # pickles_path.mkdir(parents=True, exist_ok=True)
-    # write_pickle_file(words_list, str(pickles_path.joinpath('words_list.p')))
-    # write_pickle_file(words_freq, str(pickles_path.joinpath('words_freq.p')))
-    # inner_logger.info(f'Done. Total {len(words_list)} words in the vocabulary.')
+        meta_dict = load_metadata(dataset, csv_path)
+        # meta_dict: {'audio_names': [], 'captions': []}
 
-    words_list = load_picke_file('data/pickles/words_list.p')
+        audio_nums = len(meta_dict['audio_name'])
 
-    for split_data in [(dev_csv, 'development'), (val_csv, 'validation'), (eval_csv, 'evaluation')]:
+        if split == 'train':
+            # store all captions in training set into a list
+            if dataset == 'Clotho':
+                for caps in meta_dict['captions']:
+                    for cap in caps:
+                        all_captions.append(cap)
+            else:
+                all_captions.extend(meta_dict['captions'])
 
-        split_csv = split_data[0]
-        split_name = split_data[1]
+        start_time = time.time()
 
-        split_dir = Path('data/data_splits', split_name)
-        split_dir.mkdir(parents=True, exist_ok=True)
+        with h5py.File(hdf5_path+'{}.h5'.format(split), 'w') as hf:
 
-        audio_dir = Path('data', split_name)
+            hf.create_dataset('audio_name', shape=(audio_nums,), dtype=h5py.special_dtype(vlen=str))
+            hf.create_dataset('audio_length', shape=(audio_nums,), dtype=np.uint32)
+            hf.create_dataset('waveform', shape=(audio_nums, max_audio_length), dtype=np.float32)
 
-        inner_logger.info(f'Creating the {split_name} split.')
-        _create_split_data(split_csv, split_dir, audio_dir, words_list)
-        inner_logger.info('Done')
+            if split == 'train' and dataset == 'AudioCaps':
+                hf.create_dataset('caption', shape=(audio_nums,), dtype=h5py.special_dtype(vlen=str))
+            else:
+                hf.create_dataset('caption', shape=(audio_nums, 5), dtype=h5py.special_dtype(vlen=str))
 
-        audio_number = len(os.listdir(str(audio_dir)))
-        data_number = len(os.listdir(str(split_dir)))
+            for i in tqdm(range(audio_nums)):
+                audio_name = meta_dict['audio_name'][i]
 
-        inner_logger.info('{} audio files in {}.'.format(audio_number, split_name))
-        inner_logger.info('{} data files in {}'.format(data_number, split_name))
-        inner_logger.info('{} data files per audio.'.format(data_number / audio_number))
+                audio, _ = librosa.load(audio_dir + audio_name, sr=sampling_rate, mono=True)
+                audio, audio_length = pad_or_truncate(audio, max_audio_length)
 
-    inner_logger.info('Dataset created')
+                hf['audio_name'][i] = audio_name.encode()
+                hf['audio_length'][i] = audio_length
+                hf['waveform'][i] = audio
+                hf['caption'][i] = meta_dict['captions'][i]
+
+        logger.info(f'Packed {split} set to {hdf5_path} using {time.time() - start_time} s.')
+    words_list, words_freq = _create_vocabulary(all_captions)
+    logger.info(f'Creating vocabulary: {len(words_list)} tokens!')
+    write_pickle_file(words_list, 'data/{}/pickles/words_list.p'.format(dataset))
+    write_pickle_file(words_freq, 'data/{}/pickles/words_freq.p'.format(dataset))
 
 
 def _create_vocabulary(captions):
-    words_list = []
     vocabulary = []
     for caption in captions:
         caption_words = caption.strip().split()
@@ -93,6 +127,13 @@ def _create_vocabulary(captions):
     words_list = list(set(vocabulary))
     words_list.sort(key=vocabulary.index)
     words_freq = [vocabulary.count(word) for word in words_list]
+    words_list.append('<sos>')
+    words_list.append('<eos>')
+    words_freq.append(len(captions))
+    words_freq.append(len(captions))
+    if len(words_list) > 5000:
+        words_list.append('<ukn>')
+        words_freq.append(0)
 
     return words_list, words_freq
 
@@ -109,60 +150,16 @@ def _sentence_process(sentence, add_specials=False):
     sentence = sub(r'\s([,.!?;:"](?:\s|$))', r'\1', sentence).replace('  ', ' ')
 
     # remove punctuations
-    sentence = sub('[,.!?;:\"]', ' ', sentence).replace('  ', ' ')
-
+    # sentence = sub('[,.!?;:\"]', ' ', sentence).replace('  ', ' ')
+    sentence = sub('[(,.!?;:|*\")]', ' ', sentence).replace('  ', ' ')
     return sentence
 
 
-def _create_split_data(split_csv, split_dir, audio_dir, words_list):
 
-    args = parser.parse_args()
-
-    sr = args.sr
-    n_fft = args.n_fft
-    hop_length = args.hop_length
-    n_mels = args.n_mels
-    window = args.window
-
-    caption_fields = ['caption_{}'.format(i) for i in range(1, 6)]
-    file_name_template = 'clotho_file_{audio_file_name}_{caption_index}.npy'
-
-    for csv_entry in tqdm(split_csv, total=len(split_csv)):
-
-        audio_file_name = csv_entry['file_name']
-
-        audio, _ = librosa.load(audio_dir.joinpath(audio_file_name), sr=sr)
-
-        feature = librosa.feature.melspectrogram(y=audio, sr=sr, n_fft=n_fft,
-                                                 hop_length=hop_length,
-                                                 n_mels=n_mels, window=window)
-        feature = librosa.power_to_db(feature).T
-
-        for caption_index, caption_field in enumerate(caption_fields):
-
-            caption = csv_entry[caption_field]
-
-            caption_words = caption.strip().split()
-
-            words_indexs = [words_list.index(word) for word in caption_words]
-
-            np_rec_array = np.rec.array(np.array(
-                (audio_file_name, audio, feature, caption, caption_index, np.array(words_indexs)),
-                dtype=[
-                    ('file_name', 'U{}'.format(len(audio_file_name))),
-                    ('audio_data', np.dtype(object)),
-                    ('feature', np.dtype(object)),
-                    ('caption', 'U{}'.format(len(caption))),
-                    ('caption_index', 'i4'),
-                    ('words_indexs', np.dtype(object))
-                ]
-            ))
-
-            # save the numpy object
-            file_name = str(split_dir.joinpath(file_name_template.format(
-                                audio_file_name=audio_file_name, caption_index=caption_index)))
-            np.save(file_name, np_rec_array)
-
-
-if __name__ == '__main__':
-    create_dataset()
+def pad_or_truncate(x, audio_length):
+    """Pad all audio to specific length."""
+    length = len(x)
+    if length <= audio_length:
+        return np.concatenate((x, np.zeros(audio_length - length)), axis=0), length
+    else:
+        return x[:audio_length], audio_length
