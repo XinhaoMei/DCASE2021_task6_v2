@@ -1,6 +1,8 @@
 mode: 'train' # 'eval' 'test' 'finetune'
 dataset: 'Clotho'  # 'Clotho'
 sos_token: Yes
+keywords: Yes
+num_keywords: 5
 
 wav:
   sr: 32000
@@ -21,36 +23,35 @@ decoder:
 
 encoder:
   model: 'Cnn10'
-  freeze: No
+  freeze: Yes
   pretrained: Yes
 
 word_embedding:
-  pretrained: No
+  pretrained: Yes
   freeze: Yes
 
+hugging_face:
+  pretrain: Yes
 
 data:
   batch_size: 32
   num_workers: 8
 
-
 training:
-  alpha: 0.2
   label_smoothing: Yes
   spec_augmentation: Yes
   epochs: 30
   lr: !!float 1e-3
   clip_grad: 2
   seed: 20
-  vlad: No
 
 path:
   vocabulary: 'data/{}/pickles/words_list.p'
   encoder: 'pretrained_models/audio_encoder/'
   word2vec: 'pretrained_models/word2vec/w2v_all_vocabulary.model'
+  model: ''
 
 rl:
-  mode: 'greedy'  # 'beam'
-  epochs: 25
-  model: "pretrained_models/models/submission1/best_model.pt"
+  epochs: 50
+  model: "outputs/DCASE/keywords_finetune_data_Clotho_seed_30/model/best_model.pth"
   lr: !!float 1e-4

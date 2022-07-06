@@ -9,9 +9,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from torch.nn import TransformerEncoder, TransformerEncoderLayer,\
-TransformerDecoder, TransformerDecoderLayer
-from models.Encoder import Cnn10, Cnn14
+from torch.nn import TransformerEncoder, TransformerEncoderLayer, \
+    TransformerDecoder, TransformerDecoderLayer
+from models.Encoder import Cnn10, Cnn14, ResNet38
 from tools.file_io import load_pickle_file
 from tools.utils import align_word_embedding
 from models.net_vlad import NetVLAD
@@ -26,16 +26,6 @@ def init_layer(layer):
 
 
 class PositionalEncoding(nn.Module):
-    r"""Inject some information about the relative or absolute position of the tokens
-        in the sequence. The positional encodings have the same dimension as
-        the embeddings, so that the two can be summed. Here, we use sine and cosine
-        functions of different frequencies.
-    Args:
-        d_model: the embed dim (required).
-        dropout: the dropout value (default=0.1).
-        max_len: the max. length of the incoming sequence (default=5000).
-
-    """
 
     def __init__(self, d_model, dropout=0.1, max_len=2000):
         super(PositionalEncoding, self).__init__()
@@ -69,6 +59,8 @@ class TransformerModel(nn.Module):
         super(TransformerModel, self).__init__()
         self.model_type = 'Cnn+Transformer'
 
+        self.is_keywords = config.keywords
+
         vocabulary = load_pickle_file(config.path.vocabulary.format(config.dataset))
         ntoken = len(vocabulary)
 
@@ -77,8 +69,10 @@ class TransformerModel(nn.Module):
             self.feature_extractor = Cnn10(config)
         elif config.encoder.model == 'Cnn14':
             self.feature_extractor = Cnn14(config)
+        elif config.encoder.model == 'ResNet38':
+            self.feature_extractor = ResNet38(config)
         else:
-            raise NameError('No such enocder model')
+            raise NameError('No such encoder model')
 
         if config.encoder.pretrained:
             pretrained_cnn = torch.load('pretrained_models/audio_encoder/{}.pth'.
@@ -91,27 +85,28 @@ class TransformerModel(nn.Module):
             self.feature_extractor.load_state_dict(dict_new)
         if config.encoder.freeze:
             for name, p in self.feature_extractor.named_parameters():
-                p.requires_grad = False
+                if 'fc' not in name:
+                    p.requires_grad = False
 
         # decoder settings
         self.decoder_only = config.decoder.decoder_only
-        nhead = config.decoder.nhead       # number of heads in Transformer
-        self.nhid = config.decoder.nhid         # number of expected features in decoder inputs
-        nlayers = config.decoder.nlayers   # number of sub-decoder-layer in the decoder
-        dim_feedforward = config.decoder.dim_feedforward   # dimension of the feedforward model
-        activation = config.decoder.activation     # activation function of decoder intermediate layer
-        dropout = config.decoder.dropout   # the dropout value
+        nhead = config.decoder.nhead  # number of heads in Transformer
+        self.nhid = config.decoder.nhid  # number of expected features in decoder inputs
+        nlayers = config.decoder.nlayers  # number of sub-decoder-layer in the decoder
+        dim_feedforward = config.decoder.dim_feedforward  # dimension of the feedforward model
+        activation = config.decoder.activation  # activation function of decoder intermediate layer
+        dropout = config.decoder.dropout  # the dropout value
 
         self.pos_encoder = PositionalEncoding(self.nhid, dropout)
 
         if not self.decoder_only:
             ''' Including transfomer audio_encoder '''
             encoder_layers = TransformerEncoderLayer(self.nhid,
-                                                     nhead,
+                                                     8,
                                                      dim_feedforward,
                                                      dropout,
                                                      activation)
-            self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+            self.transformer_encoder = TransformerEncoder(encoder_layers, 6)
 
         decoder_layers = TransformerDecoderLayer(self.nhid,
                                                  nhead,
@@ -126,10 +121,6 @@ class TransformerModel(nn.Module):
         self.generator = nn.Softmax(dim=-1)
         self.word_emb = nn.Embedding(ntoken, self.nhid)
 
-        self.is_vlad = config.training.vlad
-        if self.is_vlad:
-            self.net_vlad = NetVLAD(cluster_size=20, feature_size=128)
-
         self.init_weights()
 
         # setting for pretrained word embedding
@@ -139,11 +130,17 @@ class TransformerModel(nn.Module):
             self.word_emb.weight.data = align_word_embedding(config.path.vocabulary.format(config.dataset),
                                                              config.path.word2vec, config.decoder.nhid)
 
+        self.bert_pretrain = config.bert_pretrain
+
+        if self.bert_pretrain:
+            for name, p in self.feature_extractor.named_parameters():
+                p.requires_grad = False
+
     def init_weights(self):
-        initrange = 0.1
-        self.word_emb.weight.data.uniform_(-initrange, initrange)
+        # initrange = 0.1
+        # self.word_emb.weight.data.uniform_(-initrange, initrange)
         init_layer(self.audio_linear)
-        init_layer(self.dec_fc)
+        # init_layer(self.dec_fc)
 
     def generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
@@ -156,11 +153,6 @@ class TransformerModel(nn.Module):
         src = F.relu_(self.audio_linear(src))
         src = F.dropout(src, p=0.2, training=self.training)
 
-        if self.is_vlad:
-            src = src.transpose(1, 0)
-            src = self.net_vlad(src)
-            src = src.transpose(1, 0)
-
         if not self.decoder_only:
             src = src * math.sqrt(self.nhid)
             src = self.pos_encoder(src)
@@ -168,7 +160,7 @@ class TransformerModel(nn.Module):
 
         return src
 
-    def decode(self, mem, tgt, input_mask=None, target_mask=None, target_padding_mask=None):
+    def decode(self, mem, tgt, keyword=None, input_mask=None, target_mask=None, target_padding_mask=None):
         # tgt:(batch_size, T_out)
         # mem:(T_mem, batch_size, nhid)
 
@@ -176,6 +168,11 @@ class TransformerModel(nn.Module):
         if target_mask is None or target_mask.size()[0] != len(tgt):
             device = tgt.device
             target_mask = self.generate_square_subsequent_mask(len(tgt)).to(device)
+
+        if keyword is not None and self.is_keywords:
+            keyword = self.word_emb(keyword)
+            keyword = keyword.transpose(0, 1)
+            mem = torch.cat((mem, keyword), dim=0)
 
         tgt = self.word_emb(tgt) * math.sqrt(self.nhid)
 
@@ -188,16 +185,11 @@ class TransformerModel(nn.Module):
 
         return output
 
-    def forward(self, src, tgt, input_mask=None, target_mask=None, target_padding_mask=None):
+    def forward(self, src, tgt, keyword=None, input_mask=None, target_mask=None, target_padding_mask=None):
 
         mem = self.encode(src)
-        output = self.decode(mem, tgt,
+        output = self.decode(mem, tgt, keyword=keyword,
                              input_mask=input_mask,
                              target_mask=target_mask,
                              target_padding_mask=target_padding_mask)
         return output
-
-
-
-
-

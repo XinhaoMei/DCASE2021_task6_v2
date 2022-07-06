@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
+
+from gensim.models import KeyedVectors
 from loguru import logger
 from gensim.models.word2vec import Word2Vec
 from tools.file_io import load_pickle_file
@@ -74,21 +76,18 @@ def set_tgt_padding_mask(tgt, tgt_len):
     return mask
 
 
-def greedy_decode(model, src, sos_ind=0, eos_ind=9, max_len=30):
+def greedy_decode(model, src, keyword=None, sos_ind=0, eos_ind=9, max_len=30):
+    batch_size = src.shape[0]
+    encoded_feats = model.encode(src)
 
-    model.eval()
-    with torch.no_grad():
-        batch_size = src.shape[0]
-        encoded_feats = model.encode(src)
+    ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(src.device)
 
-        ys = torch.ones(batch_size, 1).fill_(sos_ind).long().to(src.device)
-
-        for i in range(max_len):
-            out = model.decode(encoded_feats, ys)  # T_out, batch_size, ntoken
-            prob = F.softmax(out[-1, :], dim=-1)
-            next_word = torch.argmax(prob, dim=1)
-            next_word = next_word.unsqueeze(1)
-            ys = torch.cat([ys, next_word], dim=1)
+    for i in range(max_len):
+        out = model.decode(encoded_feats, ys, keyword=keyword)  # T_out, batch_size, ntoken
+        prob = F.softmax(out[-1, :], dim=-1)
+        next_word = torch.argmax(prob, dim=1)
+        next_word = next_word.unsqueeze(1)
+        ys = torch.cat([ys, next_word], dim=1)
     return ys
 
 
@@ -147,12 +146,15 @@ def decode_output(predicted_output, ref_captions, file_names,
 def align_word_embedding(words_list_path, model_path, nhid):
     words_list = load_pickle_file(words_list_path)
     w2v_model = Word2Vec.load(model_path)
+    # w2v_model = KeyedVectors.load_word2vec_format('pretrained_models/word2vec-google-news-300.gz', binary=True)
     ntoken = len(words_list)
     weights = np.zeros((ntoken, nhid))
     for i, word in enumerate(words_list):
-        if word != '<ukn>':
+        try:
             embedding = w2v_model.wv[word]
             weights[i] = embedding
+        except KeyError:
+            continue
     weights = torch.from_numpy(weights).float()
     return weights
 

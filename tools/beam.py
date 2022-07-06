@@ -40,7 +40,7 @@ class BeamSearchNode(object):
         return self.logp / float(self.leng - 1 + 1e-6) + alpha * reward
 
 
-def beam_decode(src, model, sos_ind, eos_ind, beam_width=5, top_k=1, max_len=30):
+def beam_decode(src, model, sos_ind, eos_ind, keyword=None, beam_width=5, top_k=1, max_len=30):
 
     decoded_batch = []
 
@@ -54,6 +54,12 @@ def beam_decode(src, model, sos_ind, eos_ind, beam_width=5, top_k=1, max_len=30)
     for idx in range(batch_size):
 
         encoded_feat = encoded_feats[:, idx, :].unsqueeze(1)
+
+        if keyword is not None:
+            kw = keyword[idx]
+            kw = kw.unsqueeze(0)
+        else:
+            kw = None
 
         decoder_input = torch.LongTensor([[sos_ind]]).to(device)
 
@@ -80,7 +86,7 @@ def beam_decode(src, model, sos_ind, eos_ind, beam_width=5, top_k=1, max_len=30)
             score, n = nodes.get()
             decoder_input = n.wordid  # (1, seq_len) words
 
-            decoder_output = model.decode(encoded_feat, decoder_input)
+            decoder_output = model.decode(encoded_feat, decoder_input, keyword=kw)
             log_prob = F.log_softmax(decoder_output[-1, :], dim=-1)
 
             log_prob, indexes = torch.topk(log_prob, beam_width)

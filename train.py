@@ -20,7 +20,7 @@ if __name__ == '__main__':
                         help='Name of the experiment.')
     parser.add_argument('-d', '--dataset', default='Clotho', type=str,
                         help='Dataset used.')
-    parser.add_argument('-w', '--word', default='False', type=str,
+    parser.add_argument('-w', '--word', default='True', type=str,
                         help='Pre-trained word embedding.')
     parser.add_argument('-c', '--config', default='settings', type=str,
                         help='Name of the setting file.')
@@ -28,6 +28,12 @@ if __name__ == '__main__':
                         help='Batch size.')
     parser.add_argument('-s', '--seed', default=20, type=int,
                         help='Training seed')
+    parser.add_argument('-k', '--keywords', default='True', type=str,
+                        help='Use keywords or not.')
+    parser.add_argument('-p', '--pooling', default='True', type=str,
+                        help='Use input pooling or not.')
+    parser.add_argument('-t', '--type', default='avg', type=str,
+                        help='Input pooling type')
 
     args = parser.parse_args()
 
@@ -38,4 +44,7 @@ if __name__ == '__main__':
     config.data.batch_size = args.batch
     config.training.seed = args.seed
     config.word_embedding.pretrained = eval(args.word)
+    config.keywords = eval(args.keywords)
+    config.encoder.pooling = eval(args.pooling)
+    config.encoder.pooling_type = args.type
     train(config)

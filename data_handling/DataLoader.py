@@ -14,7 +14,7 @@ from torch.utils.data.dataloader import DataLoader
 
 class AudioCaptionDataset(Dataset):
 
-    def __init__(self, dataset='AudioCaps', split='train', task='captioning'):
+    def __init__(self, dataset='AudioCaps', split='train', task='captioning', return_dict=False):
         """
         load audio clip's waveform and corresponding caption
         Args:
@@ -25,8 +25,8 @@ class AudioCaptionDataset(Dataset):
         self.dataset = dataset
         self.split = split
         self.task = task
-        self.h5_path = f'/vol/research/AAC_CVSSP_research/xm00178/retrieval_baseline/' \
-                       f'data/{dataset}/hdf5s/{split}/{split}.h5'
+        self.return_dict = return_dict
+        self.h5_path = f'data/{dataset}/hdf5s/{split}/{split}.h5'
         if dataset == 'AudioCaps' and split == 'train':
             self.is_train = True
             self.num_captions_per_audio = 1
@@ -45,14 +45,14 @@ class AudioCaptionDataset(Dataset):
                 # [cap_1, cap_2, ..., cap_5]
 
     def __len__(self):
-        if self.task == 'captioning' and self.split != 'train':
+        if self.task == 'captioning' and self.split != 'train' and self.return_dict:
             return len(self.audio_keys)
         else:
             return len(self.audio_keys) * self.num_captions_per_audio
 
     def __getitem__(self, index):
 
-        if self.task == 'captioning' and self.split != 'train':
+        if self.task == 'captioning' and self.split != 'train' and self.return_dict:
             audio_idx = index
         else:
             audio_idx = index // self.num_captions_per_audio
@@ -64,11 +64,14 @@ class AudioCaptionDataset(Dataset):
             caption = self.captions[audio_idx]
         else:
             captions = self.captions[audio_idx]
-            if self.task == 'captioning' and self.split != 'train':
+            if self.task == 'captioning' and self.split != 'train' and self.return_dict:
                 caption_field = ['caption_{}'.format(i) for i in range(1, self.num_captions_per_audio + 1)]
                 caption = {}
                 for i, cap_ind in enumerate(caption_field):
                     caption[cap_ind] = captions[i].decode()
+            # elif self.task == 'captioning' and self.split != 'train' and self.return_dict is not True:
+            #     cap_idx = index % self.num_captions_per_audio
+            #     caption = captions[cap_idx].decode()
             else:
                 cap_idx = index % self.num_captions_per_audio
                 caption = captions[cap_idx].decode()
@@ -110,8 +113,8 @@ def collate_fn(batch_data):
     return wavs_tensor, captions, audio_ids, indexs, audio_names
 
 
-def get_dataloader(split, config):
-    dataset = AudioCaptionDataset(config.dataset, split)
+def get_dataloader(split, config, return_dict=False):
+    dataset = AudioCaptionDataset(config.dataset, split, 'captioning', return_dict)
     if split == 'train':
         shuffle = True
         drop_last = True

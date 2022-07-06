@@ -5,6 +5,7 @@
 
 
 import platform
+import numpy as np
 import torch
 import csv
 import torch.nn as nn
@@ -12,6 +13,7 @@ import time
 import sys
 from loguru import logger
 import argparse
+from keywords import compute_keywords
 from models.Tokenizer import WordTokenizer
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -36,7 +38,10 @@ def train(config):
     # set up logger
     exp_name = config.exp_name
 
-    folder_name = f'{exp_name}_data_{config.dataset}_seed_{config.training.seed}'
+    if not config.encoder.pooling:
+        folder_name = f'{exp_name}_data_{config.dataset}_seed_{config.training.seed}'
+    else:
+        folder_name = f'{exp_name}_data_{config.dataset}_pooling_type_{config.encoder.pooling_type}_seed_{config.training.seed}'
 
     # output setting
     model_output_dir = Path('outputs', folder_name, 'model')
@@ -83,6 +88,10 @@ def train(config):
     model = TransformerModel(config)
     model = model.to(device)
 
+    if config.path.model != '':
+        model.load_state_dict(torch.load(config.path.model)['model'])
+        main_logger.info(f'Pre-trained model loaded from {config.path.model}')
+
     main_logger.info(f'Model:\n{model}\n')
     main_logger.info('Total number of parameters:'
                      f'{sum([i.numel() for i in model.parameters()])}')
@@ -91,21 +100,63 @@ def train(config):
 
     # set up data loaders
     train_loader = get_dataloader('train', config)
-    val_loader = get_dataloader('val', config)
-    test_loader = get_dataloader('test', config)
+    val_loader = get_dataloader('val', config, return_dict=True)
+    test_loader = get_dataloader('test', config, return_dict=True)
 
-    main_logger.info(f'Size of training set: {len(train_loader.dataset)}, size of batches: {len(train_loader)}')
-    main_logger.info(f'Size of validation set: {len(val_loader.dataset)}, size of batches: {len(val_loader)}')
-    main_logger.info(f'Size of test set: {len(test_loader.dataset)}, size of batches: {len(test_loader)}')
+    main_logger.info(f'Size of training set: {len(train_loader.dataset)}; Number of batches: {len(train_loader)}')
+    main_logger.info(f'Size of validation set: {len(val_loader.dataset)}; Number of batches: {len(val_loader)}')
+    main_logger.info(f'Size of test set: {len(test_loader.dataset)}; Number of batches: {len(test_loader)}')
 
     vocabulary = load_pickle_file(config.path.vocabulary.format(config.dataset))
     ntokens = len(vocabulary)
     sos_ind = vocabulary.index('<sos>')
     eos_ind = vocabulary.index('<eos>')
 
+    # get keywords for training set
+    if config.keywords is True:
+        num_keywords = config.num_keywords
+        train_keywords_dict = load_pickle_file('data/Clotho/pickles/456/train_keywords_dict_pred_{}.p'.format(num_keywords))
+        train_size = len(train_loader.dataset)
+        keywords_list = np.zeros((int(train_size / 5), num_keywords))
+        for i in range(0, train_size, 5):
+            file_name = train_loader.dataset[i][-1]
+            keywords = train_keywords_dict[file_name]
+            keywords_index = [vocabulary.index(word) for word in keywords]
+            while len(keywords_index) < num_keywords:
+                keywords_index.append(keywords_index[-1])
+            if len(keywords_index) > num_keywords:
+                keywords_index = keywords_index[:num_keywords]
+            keywords_list[int(i/5)] = keywords_index
+
+        # val_keywords, test_keywords = compute_keywords(config, train_loader, val_loader, test_loader, keywords_list)
+        val_keywords_dict = load_pickle_file('data/Clotho/pickles/456/val_keywords_dict_pred_{}.p'.format(num_keywords))
+        val_size = len(val_loader.dataset)
+        val_keywords = np.zeros((val_size, num_keywords))
+        for i in range(val_size):
+            file_name = val_loader.dataset[i][-1]
+            keywords = val_keywords_dict[file_name]
+            keywords_index = [vocabulary.index(word) for word in keywords]
+            while len(keywords_index) < num_keywords:
+                keywords_index.append(keywords_index[-1])
+            val_keywords[i] = keywords_index
+
+        test_keywords_dict = load_pickle_file('data/Clotho/pickles/456/test_keywords_dict_pred_{}.p'.format(num_keywords))
+        test_size = len(test_loader.dataset)
+        test_keywords = np.zeros((test_size, num_keywords))
+        for i in range(test_size):
+            file_name = test_loader.dataset[i][-1]
+            keywords = test_keywords_dict[file_name]
+            keywords_index = [vocabulary.index(word) for word in keywords]
+            while len(keywords_index) < num_keywords:
+                keywords_index.append(keywords_index[-1])
+            test_keywords[i] = keywords_index
+    else:
+        val_keywords, test_keywords = None, None
+
     # set up optimizer and loss
     if config.training.label_smoothing:
         criterion = LabelSmoothingLoss(ntokens, smoothing=0.1)
+        # criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     else:
         criterion = nn.CrossEntropyLoss()
 
@@ -135,7 +186,7 @@ def train(config):
         model.train()
 
         for batch_id, batch_data in tqdm(enumerate(train_loader), total=len(train_loader)):
-            src, captions, _, _, f_names = batch_data
+            src, captions, audio_ids, _, f_names = batch_data
             src = src.to(device)
             tgt, tgt_len = tokenizer(captions)
             tgt = tgt.to(device)
@@ -144,7 +195,15 @@ def train(config):
 
             optimizer.zero_grad()
 
-            y_hat = model(src, tgt, target_padding_mask=tgt_pad_mask)
+            if config.keywords:
+                kw = torch.tensor(keywords_list[audio_ids.int().numpy()], dtype=torch.long)
+                kw = kw.to(device)
+
+            else:
+                kw = None
+
+            y_hat = model(src, tgt, keyword=kw, target_padding_mask=tgt_pad_mask)
+
             tgt = tgt[:, 1:]  # exclude <sos>
             y_hat = y_hat.transpose(0, 1)  # batch x words_len x ntokens
             y_hat = y_hat[:, :tgt.size()[1], :]  # truncate to the same length with target
@@ -170,7 +229,8 @@ def train(config):
         for i in range(1, 4):
             spider = validate(val_loader, model, beam_size=i, sos_ind=sos_ind,
                               eos_ind=eos_ind, vocabulary=vocabulary, log_dir=log_output_dir,
-                              epoch=epoch, device=device)['spider']['score']
+                              epoch=epoch, device=device, is_keyword=config.keywords,
+                              keywords_list=val_keywords)['spider']['score']
             if i != 1:
                 spiders.append(spider)
                 if spider >= max(spiders):
@@ -179,7 +239,9 @@ def train(config):
                         "optimizer": optimizer.state_dict(),
                         "beam_size": i,
                         "epoch": epoch,
+                        "config": config,
                     }, str(model_output_dir) + '/best_model.pth'.format(epoch))
+
     main_logger.info('Training done.')
     best_checkpoint = torch.load(str(model_output_dir) + '/best_model.pth')
     model.load_state_dict(best_checkpoint['model'])
@@ -189,11 +251,11 @@ def train(config):
     for i in range(1, 4):
         validate(test_loader, model, beam_size=i, sos_ind=sos_ind,
                  eos_ind=eos_ind, vocabulary=vocabulary, log_dir=log_output_dir,
-                 epoch=0, device=device)
+                 epoch=0, device=device, is_keyword=config.keywords, keywords_list=test_keywords)
     main_logger.info('Evaluation done.')
 
 
-def validate(data_loader, model, beam_size, sos_ind, eos_ind, vocabulary, log_dir, epoch, device):
+def validate(data_loader, model, beam_size, sos_ind, eos_ind, vocabulary, log_dir, epoch, device, is_keyword, keywords_list):
 
     val_logger = logger.bind(indent=1)
     model.eval()
@@ -205,13 +267,18 @@ def validate(data_loader, model, beam_size, sos_ind, eos_ind, vocabulary, log_di
 
         for batch_idx, eval_batch in tqdm(enumerate(data_loader), total=len(data_loader)):
 
-            src, target_dicts, _, _, file_names = eval_batch
+            src, target_dicts, audio_ids, _, file_names = eval_batch
             src = src.to(device)
 
-            if beam_size == 1:
-                output = greedy_decode(model, src, sos_ind=sos_ind, eos_ind=eos_ind)
+            if is_keyword:
+                kw = torch.tensor(keywords_list[audio_ids.int().numpy()], dtype=torch.long)
+                kw = kw.to(device)
             else:
-                output = beam_decode(src, model, sos_ind=sos_ind, eos_ind=eos_ind, beam_width=beam_size)
+                kw = None
+            if beam_size == 1:
+                output = greedy_decode(model, src, keyword=kw, sos_ind=sos_ind, eos_ind=eos_ind)
+            else:
+                output = beam_decode(src, model, keyword=kw, sos_ind=sos_ind, eos_ind=eos_ind, beam_width=beam_size)
 
             output = output[:, 1:].int()
             y_hat_batch = torch.zeros(output.shape).fill_(eos_ind).to(device)
