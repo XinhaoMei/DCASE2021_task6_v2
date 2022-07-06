@@ -30,10 +30,6 @@ if __name__ == '__main__':
                         help='Training seed')
     parser.add_argument('-k', '--keywords', default='True', type=str,
                         help='Use keywords or not.')
-    parser.add_argument('-p', '--pooling', default='True', type=str,
-                        help='Use input pooling or not.')
-    parser.add_argument('-t', '--type', default='avg', type=str,
-                        help='Input pooling type')
 
     args = parser.parse_args()
 
@@ -45,6 +41,4 @@ if __name__ == '__main__':
     config.training.seed = args.seed
     config.word_embedding.pretrained = eval(args.word)
     config.keywords = eval(args.keywords)
-    config.encoder.pooling = eval(args.pooling)
-    config.encoder.pooling_type = args.type
     train(config)
