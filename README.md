@@ -1,4 +1,4 @@
-# AN ENCODER-DECODER BASED AUDIO CAPTIONING SYSTEM WITH TRANSFER AND REINFORCEMENT LEARNING FOR DCASE CHALLENGE 2021 TASK 6
+# CVSSP Audio Captioning System for DCASE challenges 2021 and 2022
 
 ## Set up environment
 
@@ -9,9 +9,7 @@
 
 ## Set up dataset 
 
-* Run download_dataset.sh to download the dataset: `./download_dataset.sh`
-* The file of vocabulary has been placed under `data/pickles`
-*  Create dataset: `python dataset_creation.py`
+* Please refer to `https://github.com/XinhaoMei/audio-text_retrieval`
 
 ## Prepare evaluation tool
 
@@ -29,14 +27,9 @@
 * Set settings in `rl` block in `settings/settings.yaml` 
 * Run: `python finetune_rl.py -n exp_name` 
 
-## Reproduce results 
-
-* Four pre-trained models submitted to DCASE 2021 Task 6 are under `pretrained_model/models/submission{1-4}`
-* Change `mode` in `settings\settings.yaml` to `"eval"` and model path to the path of these pre-trained models, you can get the results displayed in our technical report
-
 ## Cite
 
-For more details, please refer to our technical report [(pdf)](http://dcase.community/documents/challenge2021/technical_reports/DCASE2021_Mei_88_t6.pdf) and paper [(pdf)](https://arxiv.org/abs/2108.02752).
+For more details, please refer to our technical report [(pdf, 2022)](https://dcase.community/documents/challenge2022/technical_reports/DCASE2022_Mei_117_t6a.pdf), [(pdf, 2021)](http://dcase.community/documents/challenge2021/technical_reports/DCASE2021_Mei_88_t6.pdf) and paper [(pdf)](https://arxiv.org/abs/2108.02752).
 
 If you use our code, please kindly cite following:
 
@@ -53,6 +46,7 @@ If you use our code, please kindly cite following:
     doi. = "10.5281/zenodo.5770113"
 }
 ```
+
 
 
 
