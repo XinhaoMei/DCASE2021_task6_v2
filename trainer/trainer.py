@@ -38,10 +38,7 @@ def train(config):
     # set up logger
     exp_name = config.exp_name
 
-    if not config.encoder.pooling:
-        folder_name = f'{exp_name}_data_{config.dataset}_seed_{config.training.seed}'
-    else:
-        folder_name = f'{exp_name}_data_{config.dataset}_pooling_type_{config.encoder.pooling_type}_seed_{config.training.seed}'
+    folder_name = f'{exp_name}_data_{config.dataset}_seed_{config.training.seed}'
 
     # output setting
     model_output_dir = Path('outputs', folder_name, 'model')
