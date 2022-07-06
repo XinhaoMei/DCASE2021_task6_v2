@@ -9,7 +9,7 @@
 
 ## Set up dataset 
 
-* Please refer to `https://github.com/XinhaoMei/audio-text_retrieval`
+* Please refer to https://github.com/XinhaoMei/audio-text_retrieval
 
 ## Prepare evaluation tool
 
