@@ -79,45 +79,6 @@ class ConvBlock(nn.Module):
         return x
 
 
-class PoolingLayer(nn.Module):
-
-    def __init__(self, pooling_type='max', factor=0.5):
-        super(PoolingLayer, self).__init__()
-        self.factor = factor
-        self.pooling_type = pooling_type
-
-    def forward(self, x):
-        """ x: mel (batch x 1 x time x freq)"""
-        factor = int(x.shape[2] * self.factor)
-
-        if self.pooling_type == 'avg':
-            size = x.shape[2] // factor
-            out = F.avg_pool2d(x, kernel_size=(size, 1))
-        elif self.pooling_type == 'max':
-            size = x.shape[2] // factor
-            out = F.max_pool2d(x, kernel_size=(size, 1))
-        elif self.pooling_type == 'avg+max':
-            size = x.shape[2] // factor
-            out1 = F.max_pool2d(x, kernel_size=(size, 1))
-            out2 = F.avg_pool2d(x, kernel_size=(size, 1))
-            out = out1 + out2
-        elif self.pooling_type == 'uniform':
-            out = self.uniform_sample(x, factor)
-        return out
-
-    def uniform_sample(self, input, factor):
-        """
-            args:
-                x: input mel spectrogram [batch, 1, time, frequency]
-            return:
-                out: reduced features [batch, 1, factor, frequency]
-            """
-        indexes = torch.linspace(0, input.shape[2] - 1, factor).tolist()
-        indexes = [int(num) for num in indexes]
-        output = input[:, :, indexes, :]
-        return output
-
-
 class Cnn10(nn.Module):
 
     def __init__(self, config):
@@ -133,10 +94,6 @@ class Cnn10(nn.Module):
         fmin = config.wav.fmin
         fmax = config.wav.fmax
 
-        self.input_pooling = config.encoder.pooling
-        if self.input_pooling:
-            self.pooling = PoolingLayer(pooling_type=config.encoder.pooling_type,
-                                        factor=config.encoder.factor)
 
         self.spectrogram_extractor = Spectrogram(n_fft=window_size,
                                                  hop_length=hop_length,
@@ -183,9 +140,6 @@ class Cnn10(nn.Module):
 
         x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
-
-        if self.input_pooling:
-            x = self.pooling(x)
 
         x = x.transpose(1, 3)
         x = self.bn0(x)
