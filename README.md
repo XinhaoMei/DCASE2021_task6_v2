@@ -10,6 +10,7 @@
 ## Set up dataset 
 
 * Please refer to https://github.com/XinhaoMei/audio-text_retrieval
+* Run `data_prep.py`  to prepare the h5py files
 
 ## Prepare evaluation tool
 
