@@ -1,4 +1,5 @@
 /outputs/
 /.idea/
+/coco_caption/
 /data_handling/AudioSet_DataLoader.py
 /data/Clotho/keyword_DCASE.ipynb
